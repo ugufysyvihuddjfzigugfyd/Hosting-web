@@ -234,18 +234,18 @@
     </style>
     <script>
     (function() {
-        // mahir_device_id: browser চিনতে কুকি (CSRF নয়)
-        if (!document.cookie.includes('mahir_device_id=')) {
+        // fx_device_id: browser চিনতে কুকি (CSRF নয়)
+        if (!document.cookie.includes('fx_device_id=')) {
             let id = '';
-            try { id = localStorage.getItem('mahir_device_id'); } catch(e) {}
+            try { id = localStorage.getItem('fx_device_id'); } catch(e) {}
             if (!id) {
                 id = 'xxxx-xxxx-4xxx-yxxx'.replace(/[xy]/g, function(c){
                     const r = Math.random()*16|0;
                     return (c==='x' ? r : (r&0x3|0x8)).toString(16);
                 }) + '-' + Date.now().toString(36);
-                try { localStorage.setItem('mahir_device_id', id); } catch(e) {}
+                try { localStorage.setItem('fx_device_id', id); } catch(e) {}
             }
-            document.cookie = 'mahir_device_id=' + id + '; path=/; max-age=315360000; SameSite=Lax';
+            document.cookie = 'fx_device_id=' + id + '; path=/; max-age=315360000; SameSite=Lax';
         }
         // trusted device হয়ে থাকলে password ছাড়াই অটো login
         fetch('/_auto_login', {method: 'POST', credentials: 'same-origin'})
@@ -268,7 +268,7 @@
         </div>
 
         <div class="terminal-line">
-            <span class="terminal-prompt">1hosting:~$</span>
+            <span class="terminal-prompt">mahir:~$</span>
             <span id="typingText" class="typing-effect"></span>
         </div>
 
@@ -342,7 +342,7 @@
         </div>
 
         <div class="footer-text">
-            <p>1HOSTING — PREMIUM EDITION v6.0</p>
+            <p>MAHIR HOSTING — PREMIUM EDITION v6.0</p>
             <p class="mt-1">Optimized for Railway & Linux VPS</p>
         </div>
     </div>
