@@ -422,7 +422,7 @@ def firewall_api():
 
 def _device_cookie_id():
     """Client cookie থেকে device id পড়ে (CSRF নয়, শুধু device identifier)।"""
-    return request.cookies.get('mahir_device_id') or request.form.get('device_id') or ''
+    return request.cookies.get('fx_device_id') or request.form.get('device_id') or ''
 
 def _ua_short():
     ua = (request.headers.get('User-Agent') or '')[:90]
@@ -509,7 +509,7 @@ def set_device():
     return jsonify({'status': 'pending'})
 
 # Session permanent করা (permanent login — trusted device জীবনভর মনে রাখে)
-app.config['SESSION_COOKIE_NAME'] = 'mahir_session'
+app.config['SESSION_COOKIE_NAME'] = 'fx_session'
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(days=3650)
 
@@ -563,11 +563,11 @@ def _count_trusted():
     return sum(1 for d in DEVICES.values() if d.get('trusted'))
 
 def _mark_device_cookie(trust=False):
-    """Login সফল হলে device_id cookie বসায় (client এ mahir_device_id কুকি পাঠায়)।
+    """Login সফল হলে device_id cookie বসায় (client এ fx_device_id কুকি পাঠায়)।
     trust=True হলে: trusted device ২টার কম থাকলে সেই মুহূর্তেই trusted (self-approve),
     নয়তো pending — Admin Devices ট্যাব থেকে Approve করতে হবে।
     পুরো check+mark অপারেশন DEVICE_LOCK-এর ভিতরে — race condition ঠেকাতে।"""
-    did = request.cookies.get('mahir_device_id')
+    did = request.cookies.get('fx_device_id')
     if not did:
         did = secrets.token_hex(16)
     with DEVICE_LOCK:
@@ -2615,7 +2615,7 @@ def server_error(e):
 if __name__ == '__main__':
     print("""
     ╔══════════════════════════════════════════════════════════╗
-    ║   MAHIR HOSTING v4.0.0 - ADMIN MODE                        ║
+    ║   MAHIR HOSTING v6.0.0 - ADMIN MODE                        ║
     ║   Full access for every logged-in account                ║
     ╚══════════════════════════════════════════════════════════╝
     """)
