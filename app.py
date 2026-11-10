@@ -2569,6 +2569,7 @@ def serve_appjs():
         traceback.print_exc()
         return "/* app.js render error */", 500
 
+
 def _index_context():
     """Builds the exact context the index page (and app.js) needs."""
     stats = get_system_stats()
@@ -2592,8 +2593,10 @@ def _index_context():
         servers=serializable_servers, themes=THEMES,
         stats=stats, app_uptime=format_uptime(int(time.time() - START_TIME)),
         start_date=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(START_TIME)),
+        is_termux=os.path.isdir('/data/data/com.termux'),   # ← নতুন লাইন
         g=None,
     )
+
 
 @app.errorhandler(404)
 def not_found(e): return jsonify({'error': 'Not found'}), 404
