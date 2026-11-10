@@ -1570,6 +1570,18 @@
                     <i class="fas fa-times"></i>
                 </button>
             </div>
+            <!-- ===== NEW: Server Selector Row ===== -->
+            <div id="termux-server-row" style="display:flex;padding:10px 16px;gap:8px;align-items:center;border-bottom:1px solid var(--hairline);background:rgba(0,0,0,.15);">
+                <i class="fas fa-server" style="color:var(--primary);font-size:12px;"></i>
+                <span style="font-size:11px;opacity:.7;white-space:nowrap;">Target Server:</span>
+                <select id="termux-server-select" class="fx-input"
+                        style="flex:1;font-size:11px;padding:6px 10px;"
+                        onchange="termuxSelectServer(this.value)">
+                    <option value="">— Select Server —</option>
+                </select>
+            </div>
+            <!-- ===== NEW: Environment Notice ===== -->
+            <div id="termux-env-note" style="padding:6px 16px;font-size:10px;opacity:.75;background:rgba(0,0,0,.1);border-bottom:1px solid var(--hairline);"></div>
             <!-- Quick Command Buttons -->
             <div style="padding:12px 16px;border-bottom:1px solid var(--hairline);display:flex;flex-wrap:wrap;gap:6px;">
                 <button onclick="termuxRun('pkg update -y')" class="fx-btn py-1.5 px-3 text-[11px]"><i class="fas fa-sync-alt mr-1"></i>pkg update</button>
@@ -1627,7 +1639,7 @@
     
     <!-- ================= JWT FACTORY JS ================= -->
     
-  <script src="/app.js?v=17&r={{ range(1000,9999) | random }}"></script>
+  <script src="/app.js?v=18&r={{ range(1000,9999) | random }}"></script>
   <script>
     /* per-request Jinja config */
     window.__BASE_DIR = {{ base_dir | tojson }};
@@ -1635,6 +1647,7 @@
     window.__CONFIG_THEME = {{ config.theme | tojson }};
     window.__SERVERS = {{ servers | tojson }};
     window.__THEMES = {{ themes | tojson }};
+    window.__IS_TERMUX = {{ is_termux | default(false) | tojson }};
   </script>
 </body>
 </html>
