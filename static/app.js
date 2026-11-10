@@ -344,7 +344,7 @@
         currentPath = '';
         document.getElementById('manager-title').innerHTML = '<i class="fas fa-cog"></i> ' + serverId;
         document.getElementById('manager-id').textContent = 'ID: ' + serverId;
-        document.getElementById('manager-console-title').textContent = serverId + '@fx-hosting:~$';
+        document.getElementById('manager-console-title').textContent = serverId + '@mahir:~$';
         document.getElementById('serverManagerModal').classList.add('active');
         
         // Reset overview UI + chart BEFORE the first fetch resolves, so switching
@@ -1183,7 +1183,7 @@
 
     function terminalPrintBanner() {
         termPrint(`<span style="color:var(--primary);font-weight:bold;">╔══════════════════════════════════════════════════════════╗
-║   1HOSTING TERMINAL  ·  Termux Mode  v5.0.0           ║
+║   MAHIR HOSTING TERMINAL  ·  Termux Mode  v5.0.0           ║
 ║   Type <span style="color:var(--warning);">help</span> for commands  ·  <span style="color:var(--info);">TAB</span> for autocomplete       ║
 ╚══════════════════════════════════════════════════════════╝</span>`);
     }
@@ -1265,7 +1265,7 @@
     }
 
     function termPrintHelp() {
-        termPrint(`<span style="color:var(--primary);font-weight:bold;">1HOSTING Terminal — Available Features</span>
+        termPrint(`<span style="color:var(--primary);font-weight:bold;">MAHIR HOSTING Terminal — Available Features</span>
 <span style="color:var(--warning);">Navigation:</span>  cd, ls, pwd, find
 <span style="color:var(--warning);">System:</span>      ps aux, top, free -h, df -h, uname -a, whoami, uptime
 <span style="color:var(--warning);">Network:</span>     netstat, ping, curl, wget
@@ -2135,7 +2135,7 @@
     setInterval(updateUptime, 60000);
     
     // =============================================================================
-    // 1HOSTING v5.0 - NEW FEATURES JS
+    // MAHIR HOSTING v5.0 - NEW FEATURES JS
     // =============================================================================
 
     // ----- HEALTH SCORE -----
@@ -2507,7 +2507,7 @@ function refreshDevices() {
     // ===== THEME OBJECT =====
     const THEMES = window.__THEMES;
 
-    // ===== SINGLE ROLE - 1HOSTING v6.0 =====
+    // ===== SINGLE ROLE - MAHIR HOSTING v6.0 =====
     // Every logged-in session has full access. Show a simple ADMIN badge only.
     document.addEventListener('DOMContentLoaded', function() {
         const roleDiv = document.createElement('div');
