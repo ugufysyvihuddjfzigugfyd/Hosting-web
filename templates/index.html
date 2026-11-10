@@ -77,10 +77,7 @@
             <div class="nav-item" onclick="switchView('telegram')" id="nav-telegram">
                 <i class="fab fa-telegram"></i><span>Telegram Bot</span>
             </div>
-            <div class="nav-item" onclick="switchView('jwtfactory')" id="nav-jwtfactory">
-                <i class="fas fa-industry"></i><span>JWT Factory</span>
-                <span class="ml-auto text-[9px] px-2 py-0.5 rounded-full" style="background: var(--accent); color: var(--bg); font-weight:800;">NEW</span>
-            </div>
+
             <div class="nav-item" onclick="switchView('ports')" id="nav-ports">
                 <i class="fas fa-network-wired"></i><span>Port Scanner</span>
             </div>
@@ -646,9 +643,14 @@
             </div>
         </div>
 <div id="view-packages" class="section-view">
-            <h2 class="text-lg font-bold mb-4 flex items-center gap-2" style="color: var(--primary);">
-                <i class="fas fa-cubes"></i> Package Manager
-            </h2>
+            <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+                <h2 class="text-lg font-bold flex items-center gap-2" style="color: var(--primary);">
+                    <i class="fas fa-cubes"></i> Package Manager
+                </h2>
+                <button onclick="openTermuxUpdater()" class="fx-btn flex items-center gap-2" style="border-color:var(--accent);color:var(--accent);">
+                    <i class="fas fa-terminal"></i> Termux Updater
+                </button>
+            </div>
             <div class="grid md:grid-cols-2 gap-4">
                 <div class="fx-card p-5">
                     <h3 class="text-sm font-bold mb-4 flex items-center gap-2" style="color: var(--accent);">
@@ -1151,28 +1153,7 @@
                     </div>
                 </div>
 
-                <!-- JWT Factory API Settings -->
-                <div class="fx-card p-5">
-                    <h3 class="text-sm font-bold mb-4 flex items-center gap-2" style="color: var(--accent);">
-                        <i class="fas fa-key"></i> JWT Factory API
-                    </h3>
-                    <div class="space-y-3">
-                        <div>
-                            <label class="text-xs opacity-70 mb-1 block">JWT API URL</label>
-                            <input type="text" id="set-jwt-api-url" value="{{ config.jwt_api_url }}" placeholder="https://fiddu-jwt-olive.vercel.app/token" class="fx-input">
-                        </div>
-                        <div>
-                            <label class="text-xs opacity-70 mb-1 block">JWT API Key <span class="opacity-50">(optional — খালি রাখলে API-তে key পাঠানো হবে না)</span></label>
-                            <input type="text" id="set-jwt-api-key" value="{{ config.jwt_api_key }}" placeholder="খালি রাখুন যদি key দরকার না হয়" class="fx-input">
-                        </div>
-                        <p class="text-[11px] opacity-60">🔗 JWT Factory এর সব token generation (Process Now এবং Schedule সহ) এই URL/Key দিয়ে হবে — restart লাগবে না, সেভ করলেই সাথে সাথে কার্যকর। Key ফাঁকা রাখলে request-এ কোনো key parameter পাঠানো হবে না।</p>
-                        <button onclick="saveJwtApiSettings()" class="fx-btn w-full">
-                            <i class="fas fa-save mr-2"></i> Save API Settings
-                        </button>
-                    </div>
-                </div>
-
-                <!-- System Info -->
+                                <!-- System Info -->
                 <div class="fx-card p-5">
                     <h3 class="text-sm font-bold mb-4 flex items-center gap-2" style="color: var(--info);">
                         <i class="fas fa-info-circle"></i> System Information
@@ -1331,10 +1312,12 @@
                 </div>
                 <!-- Console Tab -->
                 <div id="manager-console" class="manager-tab hidden">
-                    <div class="flex gap-2 mb-3">
+                    <div class="flex gap-2 mb-3 flex-wrap">
                         <button onclick="managerAction('start')" class="fx-btn py-2 px-3 text-[11px]"><i class="fas fa-play"></i> Start</button>
                         <button onclick="managerAction('stop')" class="fx-btn fx-btn-danger py-2 px-3 text-[11px]"><i class="fas fa-stop"></i> Stop</button>
                         <button onclick="managerAction('restart')" class="fx-btn fx-btn-warning py-2 px-3 text-[11px]"><i class="fas fa-sync-alt"></i> Restart</button>
+                        <button onclick="openFullscreenLogs()" class="fx-btn py-2 px-3 text-[11px]" style="border-color:var(--accent);color:var(--accent);" title="Full Screen Logs"><i class="fas fa-expand-alt"></i> Full</button>
+                        <button onclick="openTermuxUpdater()" class="fx-btn py-2 px-3 text-[11px]" style="border-color:var(--info);color:var(--info);" title="Termux Updater"><i class="fas fa-terminal"></i></button>
                         <button onclick="backupCurrentServer()" class="fx-btn fx-btn-info py-2 px-3 text-[11px] ml-auto"><i class="fas fa-archive"></i> Backup</button>
                     </div>
                     <div class="terminal-container" style="height: 300px;">
@@ -1536,176 +1519,106 @@
         </div>
     </div>
 
-    <!-- =================================================================
-         JWT FACTORY VIEW
-         ================================================================= -->
-    <div id="view-jwtfactory" class="section-view">
-        <h2 class="text-lg font-bold mb-1 flex items-center gap-2" style="color: var(--primary);">
-            <i class="fas fa-industry"></i> JWT Token Factory
-            <span class="text-[10px] font-normal opacity-50 ml-1">প্যনেল থেকেই টোকেন বানান আর সার্ভারে আপলোড</span>
-        </h2>
-        <div class="text-[11px] opacity-60 mb-4">UID:Pass / JSON — API → Token → Region Split → আপনার চোয়া সার্ভার+পাথ এ সেভ</div>
-
-        <!-- ===== 1. Process Setup ===== -->
-        <div class="fx-card p-5 mb-4" style="border-left: 4px solid var(--primary);">
-            <h3 class="text-sm font-bold mb-4 flex items-center gap-2" style="color: var(--primary);">
-                <i class="fas fa-flask"></i> Process Setup
-            </h3>
-            <div class="space-y-3">
-                <div>
-                    <label class="text-xs opacity-70 mb-1 block">📄 Source — ফোনের ফাইল Upload করুন অথবা Server থেকে Browse/Load করুন (accounts.txt / JSON সব format চালে)</label>
-                    <div class="flex gap-2">
-                        <label class="fx-btn fx-btn-warning flex-1" style="min-height:42px; cursor:pointer;" for="jwf-src-localfile"><i class="fas fa-file-upload"></i> ফাইল Upload করুন<input type="file" id="jwf-src-localfile" accept=".txt,.json,.js,.csv" class="hidden" onchange="jwfLoadLocalFile(this)"></label>
-                        <button onclick="jwfBrowse('src')" class="fx-btn fx-btn-info flex-1" style="min-height:42px;"><i class="fas fa-folder-open"></i> Server Browse</button>
-                    </div>
-                    <div class="flex gap-2 mt-2">
-                        <select id="jwf-src-server" class="fx-select flex-1" onchange="jwfLoadServerOptions('src')"></select>
-                        <select id="jwf-src-subpath" class="fx-select flex-[2]" onchange="jwfLoadServerOptions('src')"></select>
-                    </div>
-                    <div class="flex items-center gap-2 mt-2"><span id="jwf-src-status" class="text-[11px] opacity-60">💡 ট্যাপ করে ফাইল বাছাই করুন</span></div>
-                    <textarea id="jwf-source" placeholder="Or directly এখানে পেস্ট করুন (uid:pass per line / JSON)" class="fx-input font-mono mt-2" style="min-height:110px;"></textarea>
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div>
-                        <label class="text-xs opacity-70 mb-1 block">🖥️ Target Server</label>
-                        <select id="jwf-target-server" class="fx-select" onchange="jwfLoadServerOptions('tgt')"></select>
-                    </div>
-                    <div>
-                        <label class="text-xs opacity-70 mb-1 block">📁 Target Folder</label>
-                        <div class="flex gap-2">
-                            <input type="text" id="jwf-target-path" placeholder="/tokens" class="fx-input flex-1">
-                            <button onclick="jwfBrowse('tgt')" class="fx-btn fx-btn-info"><i class="fas fa-folder-open"></i></button>
-                        </div>
-                    </div>
-                    <div>
-                        <label class="text-xs opacity-70 mb-1 block">🏷️ Output File Name</label>
-                        <input type="text" id="jwf-output-name" value="token_bd.json" class="fx-input" placeholder="token_bd.json">
-                    </div>
-                </div>
-                <div class="flex gap-2">
-                    <button onclick="jwfRunNow()" id="jwf-btn-run" class="fx-btn fx-btn-success flex-1"><i class="fas fa-play"></i> Process Now</button>
-                    <button onclick="jwfOpenScheduleModal()" class="fx-btn flex-1"><i class="fas fa-clock"></i> Schedule করুন</button>
-                </div>
-                <div id="jwf-upload-target" class="text-[11px] p-2 rounded-lg" style="background: rgba(255,255,255,.03); border:1px dashed var(--hairline); color: var(--info);"></div>
+    
+    
+    <!-- ===== FULLSCREEN LOGS MODAL ===== -->
+    <div id="fullscreen-logs-modal" class="hidden" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;background:#000;display:none;flex-direction:column;">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--card-bg,#111);border-bottom:1px solid var(--hairline,#222);">
+            <div style="display:flex;align-items:center;gap:10px;">
+                <span style="color:var(--primary);font-weight:800;font-size:13px;" id="fs-logs-title">📋 Logs</span>
+                <span class="live-dot" id="fs-live-dot"></span>
+                <span style="font-size:10px;opacity:.5;" id="fs-log-count"></span>
             </div>
-
-            <!-- Live Progress -->
-            <div id="jwf-progress-wrap" class="hidden mt-4">
-                <div class="flex justify-between text-[11px] mb-1.5">
-                    <span id="jwf-pct-text" class="font-bold" style="color: var(--primary);">0%</span>
-                    <span id="jwf-latest" class="opacity-70"></span>
-                </div>
-                <div class="progress-bar"><div class="progress-fill" id="jwf-pct-bar" style="width:0%; background: var(--primary);"></div></div>
-                <div class="grid grid-cols-3 gap-3 mt-3">
-                    <div class="stat-card text-center" style="border-left: 4px solid var(--primary);"><div class="text-xl font-extrabold" style="color: var(--primary);" id="jwf-done">0</div><div class="text-[10px] opacity-60 font-bold">DONE</div></div>
-                    <div class="stat-card text-center" style="border-left: 4px solid var(--info);"><div class="text-xl font-extrabold" style="color: var(--info);" id="jwf-ok">0</div><div class="text-[10px] opacity-60 font-bold">SUCCESS</div></div>
-                    <div class="stat-card text-center" style="border-left: 4px solid var(--danger);"><div class="text-xl font-extrabold" style="color: var(--danger);" id="jwf-fail">0</div><div class="text-[10px] opacity-60 font-bold">FAILED</div></div>
-                </div>
-                <div id="jwf-region-files" class="mt-2 text-[11px] opacity-70 font-mono"></div>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <button id="fs-logs-autoscroll-btn" onclick="fsToggleAutoscroll()" style="font-size:10px;padding:4px 10px;border-radius:6px;border:1px solid var(--primary);background:transparent;color:var(--primary);cursor:pointer;">
+                    <i class="fas fa-arrow-down mr-1"></i>Auto
+                </button>
+                <button id="fs-logs-stop-btn" onclick="fsToggleLogsStream()" style="font-size:10px;padding:4px 10px;border-radius:6px;border:1px solid var(--warning);background:transparent;color:var(--warning);cursor:pointer;">
+                    <i class="fas fa-stop mr-1"></i>Stop
+                </button>
+                <button onclick="fsClearLogs()" style="font-size:10px;padding:4px 10px;border-radius:6px;border:1px solid var(--danger);background:transparent;color:var(--danger);cursor:pointer;">
+                    <i class="fas fa-trash mr-1"></i>Clear
+                </button>
+                <button onclick="fsCopyLogs()" style="font-size:10px;padding:4px 10px;border-radius:6px;border:1px solid var(--info);background:transparent;color:var(--info);cursor:pointer;">
+                    <i class="fas fa-copy mr-1"></i>Copy
+                </button>
+                <button onclick="closeFullscreenLogs()" style="font-size:14px;padding:4px 10px;border-radius:6px;border:1px solid var(--danger);background:var(--danger);color:#fff;cursor:pointer;">
+                    <i class="fas fa-compress-alt mr-1"></i>Close
+                </button>
             </div>
         </div>
-
-        <!-- ===== 2. Schedule Dashboard ===== -->
-        <div class="fx-card p-5" style="border-left: 4px solid var(--accent);">
-            <h3 class="text-sm font-bold mb-4 flex items-center gap-2" style="color: var(--accent);">
-                <i class="fas fa-calendar-alt"></i> Schedule Dashboard
-            </h3>
-            <div class="overflow-x-auto">
-                <table class="w-full text-[11px]">
-                    <thead>
-                        <tr class="text-left opacity-70 border-b" style="border-color: var(--hairline);">
-                            <th class="p-2">নাম</th><th class="p-2">Source</th><th class="p-2">Server + Path</th>
-                            <th class="p-2">Output</th><th class="p-2">Interval</th><th class="p-2">Last Run</th>
-                            <th class="p-2">Next</th><th class="p-2 text-right">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="jwf-sched-body"></tbody>
-                </table>
-                <div id="jwf-sched-empty" class="text-center opacity-50 py-6 hidden">কোনো schedule নেই — উপরে "Schedule করুন" চাপুন</div>
-            </div>
-            <button onclick="jwfOpenScheduleModal()" class="fx-btn fx-btn-info w-full mt-4"><i class="fas fa-plus"></i> New Schedule</button>
-        </div>
-
-        <!-- ===== 3. JWT Live Monitor ===== -->
-        <div class="fx-card p-5" style="border-left: 4px solid var(--info);">
-            <h3 class="text-sm font-bold mb-4 flex items-center gap-2" style="color: var(--info);">
-                <i class="fas fa-satellite-dish"></i> JWT Live Monitor
-            </h3>
-            <p class="text-[11px] opacity-60 mb-3">প্রতিটা schedule-এর জন্য কত ID আছে, পরের রান কতক্ষণ পরে, আর চলতি রানের progress — সব এখানে লাইভ দেখা যাবে। Start চাপলেই সেই schedule সাথে সাথে নতুন করে JWT generate করে upload করবে।</p>
-            <div id="jwf-monitor-list" class="space-y-3"></div>
-            <div id="jwf-monitor-empty" class="text-center opacity-50 py-6 hidden">কোনো schedule নেই</div>
+        <pre id="fs-logs-content" style="flex:1;overflow-y:auto;padding:12px 16px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#e0ffe0;background:#050505;white-space:pre-wrap;word-break:break-all;margin:0;"></pre>
+        <div style="padding:8px 16px;background:var(--card-bg,#111);border-top:1px solid var(--hairline,#222);display:flex;gap:8px;">
+            <span style="color:var(--primary);font-size:13px;">$</span>
+            <input type="text" id="fs-cmd-input" placeholder="Command পাঠান..." 
+                style="flex:1;background:transparent;border:none;outline:none;color:var(--text,#eee);font-family:'JetBrains Mono',monospace;font-size:12px;"
+                onkeydown="if(event.key==='Enter') fsSendCommand()">
+            <button onclick="fsSendCommand()" style="font-size:11px;padding:4px 12px;border-radius:6px;background:var(--primary);color:var(--bg,#000);border:none;cursor:pointer;font-weight:700;">Send</button>
         </div>
     </div>
 
-    <!-- JWT Factory: Folder Browser Modal -->
-    <div id="jwfBrowseModal" class="modal-overlay hidden" onclick="if(event.target===this)closeJwfBrowse()">
-        <div class="fx-card w-[92%] max-w-md p-5" style="max-height:80vh; overflow-y:auto;">
-            <h3 class="text-sm font-bold mb-3 flex items-center gap-2" style="color: var(--primary);">
-                <i class="fas fa-folder-open"></i> <span id="jwf-browse-title">Browse Server</span>
-            </h3>
-            <div id="jwf-browse-crumb" class="flex flex-wrap items-center gap-1 text-[11px] font-mono mb-2 p-2 rounded-lg" style="background: rgba(255,255,255,.03); border:1px solid var(--hairline);"></div>
-            <div id="jwf-browse-path" class="text-[11px] font-mono opacity-70 mb-3 break-all"></div>
-            <div id="jwf-browse-list" class="space-y-1.5"></div>
-            <div class="flex gap-2 mt-4">
-                <input type="text" id="jwf-browse-newfolder" placeholder="নতুন folder নাম" class="fx-input flex-1">
-                <button onclick="jwfBrowseCreateFolder()" class="fx-btn fx-btn-success"><i class="fas fa-folder-plus"></i></button>
+    <!-- ===== TERMUX UPDATER MODAL ===== -->
+    <div id="termux-updater-modal" class="hidden modal-overlay" onclick="if(event.target===this)closeTermuxUpdater()" style="display:none;">
+        <div class="fx-card" style="width:92%;max-width:650px;max-height:85vh;display:flex;flex-direction:column;">
+            <div style="padding:14px 16px;border-bottom:1px solid var(--hairline);display:flex;align-items:center;justify-content:space-between;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <i class="fas fa-terminal" style="color:var(--primary);"></i>
+                    <span style="font-weight:800;color:var(--primary);">Termux Updater</span>
+                    <span style="font-size:10px;opacity:.5;" id="termux-target-label">— no server</span>
+                </div>
+                <button onclick="closeTermuxUpdater()" style="opacity:.6;font-size:16px;cursor:pointer;background:none;border:none;color:var(--text);">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
-            <div class="flex gap-2 mt-3">
-                <button onclick="jwfBrowseSelectPath()" class="fx-btn fx-btn-success flex-1"><i class="fas fa-check"></i> এই পাথ সিলেক্ট</button>
-                <button onclick="closeJwfBrowse()" class="fx-btn fx-btn-danger">Cancel</button>
+            <!-- Quick Command Buttons -->
+            <div style="padding:12px 16px;border-bottom:1px solid var(--hairline);display:flex;flex-wrap:wrap;gap:6px;">
+                <button onclick="termuxRun('pkg update -y')" class="fx-btn py-1.5 px-3 text-[11px]"><i class="fas fa-sync-alt mr-1"></i>pkg update</button>
+                <button onclick="termuxRun('pkg upgrade -y')" class="fx-btn py-1.5 px-3 text-[11px]" style="border-color:var(--warning);color:var(--warning);"><i class="fas fa-arrow-up mr-1"></i>pkg upgrade</button>
+                <button onclick="termuxRun('pkg update && pkg upgrade -y')" class="fx-btn py-1.5 px-3 text-[11px]" style="border-color:var(--accent);color:var(--accent);"><i class="fas fa-bolt mr-1"></i>update + upgrade</button>
+                <button onclick="termuxRun('pip install -r requirements.txt')" class="fx-btn py-1.5 px-3 text-[11px]" style="border-color:var(--info);color:var(--info);"><i class="fas fa-python mr-1 fab"></i>pip -r requirements</button>
+                <button onclick="termuxRun('pip install --upgrade pip')" class="fx-btn py-1.5 px-3 text-[11px]"><i class="fas fa-download mr-1"></i>upgrade pip</button>
+                <button onclick="termuxRun('pkg install ffmpeg -y')" class="fx-btn py-1.5 px-3 text-[11px]" style="border-color:var(--secondary);color:var(--secondary);"><i class="fas fa-film mr-1"></i>install ffmpeg</button>
+                <button onclick="termuxRun('pkg install python -y')" class="fx-btn py-1.5 px-3 text-[11px]"><i class="fas fa-code mr-1"></i>install python</button>
+                <button onclick="termuxRun('pkg install nodejs -y')" class="fx-btn py-1.5 px-3 text-[11px]"><i class="fab fa-node-js mr-1"></i>install nodejs</button>
+                <button onclick="termuxRun('pip list')" class="fx-btn py-1.5 px-3 text-[11px]"><i class="fas fa-list mr-1"></i>pip list</button>
+                <button onclick="termuxRun('pkg list-installed')" class="fx-btn py-1.5 px-3 text-[11px]"><i class="fas fa-boxes mr-1"></i>pkg list</button>
+            </div>
+            <!-- Terminal Output -->
+            <div style="flex:1;overflow:hidden;position:relative;" class="terminal-container">
+                <div class="terminal-header">
+                    <span style="font-size:10px;opacity:.6;" id="termux-status-label">Ready</span>
+                    <span class="ml-auto flex items-center gap-2">
+                        <button id="termux-stop-btn" onclick="termuxStop()" style="font-size:9px;padding:3px 8px;border-radius:5px;border:1px solid var(--warning);color:var(--warning);background:transparent;cursor:pointer;" class="hidden"><i class="fas fa-stop mr-1"></i>Stop</button>
+                        <button onclick="termuxClearLog()" style="font-size:9px;padding:3px 8px;border-radius:5px;border:1px solid var(--danger);color:var(--danger);background:transparent;cursor:pointer;"><i class="fas fa-trash mr-1"></i>Clear</button>
+                        <span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>
+                        <span class="w-2.5 h-2.5 rounded-full bg-yellow-500"></span>
+                        <span class="w-2.5 h-2.5 rounded-full bg-green-500 cursor-pointer" onclick="termuxStop()"></span>
+                    </span>
+                </div>
+                <pre id="termux-log" class="terminal-body fx-pre" style="height:260px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;">$ ready — select a command above or type below
+</pre>
+            </div>
+            <!-- Custom Command Input -->
+            <div style="padding:10px 16px;border-top:1px solid var(--hairline);display:flex;gap:8px;align-items:center;">
+                <span style="color:var(--primary);font-size:13px;">$</span>
+                <input type="text" id="termux-cmd-input" placeholder="Custom command (e.g. pip install flask)..." 
+                    class="fx-input flex-1" style="font-family:'JetBrains Mono',monospace;font-size:12px;"
+                    onkeydown="if(event.key==='Enter') termuxRunCustom()">
+                <button onclick="termuxRunCustom()" class="fx-btn py-2 px-4"><i class="fas fa-play"></i></button>
             </div>
         </div>
     </div>
 
-    <!-- JWT Factory: Schedule Modal -->
-    <div id="jwfSchedModal" class="modal-overlay hidden" onclick="if(event.target===this)closeJwfSched()">
-        <div class="fx-card w-[92%] max-w-md p-5" style="max-height:80vh; overflow-y:auto;">
-            <h3 class="text-sm font-bold mb-4 flex items-center gap-2" style="color: var(--accent);">
-                <i class="fas fa-clock"></i> <span id="jwf-sched-modal-title">New Schedule</span>
-            </h3>
-            <input type="hidden" id="jwf-edit-id">
-            <div class="space-y-3">
-                <div><label class="text-xs opacity-70 mb-1 block">নাম</label>
-                    <input type="text" id="jwf-s-name" placeholder="Main Tokens" class="fx-input"></div>
-                <div><label class="text-xs opacity-70 mb-1 block">🖥️ Source Server (যে account থেকে file পড়বে)</label>
-                    <div class="flex gap-2">
-                        <select id="jwf-s-srcserver" class="fx-select flex-1" onchange="jwfRefreshSchedSrcHint()"></select>
-                        <label class="fx-btn fx-btn-warning" style="min-height:38px; cursor:pointer;" for="jwf-s-localfile"><i class="fas fa-file-upload"></i><input type="file" id="jwf-s-localfile" accept=".txt,.json,.js,.csv" class="hidden" onchange="jwfScheduleUploadFile(this)"></label>
-                        <button type="button" onclick="jwfBrowse('ssrc')" class="fx-btn fx-btn-info"><i class="fas fa-folder-open"></i></button>
-                    </div>
-                    <p class="text-[10px] opacity-50 mt-1">📤 আগে Target Server বেছে নিন, তারপর ফোন থেকে ফাইল Upload করুন — সাথে সাথে নতুন JWT generate হয়ে Target-এ upload হয়ে যাবে (ঠিক Process Now-এর মতো)। ফাইলটা এই Source Server-এও সেভ থাকবে যাতে schedule-এর প্রতিটা future run এখান থেকেই আবার generate করতে পারে।</p>
-                    <div id="jwf-s-upload-status" class="text-[11px] mt-1" style="color: var(--info);"></div>
-                </div>
-                <div><label class="text-xs opacity-70 mb-1 block">Source File (server থেকে পড়বে)</label>
-                    <div class="flex gap-2"><input type="text" id="jwf-s-srcfile" placeholder="accounts.txt" class="fx-input flex-1">
-                    <input type="text" id="jwf-s-srcpath" placeholder="/ (folder)" class="fx-input flex-1"></div>
-                    <div id="jwf-s-src-hint" class="text-[11px] opacity-60 mt-1"></div>
-                </div>
-                <div class="grid grid-cols-2 gap-2">
-                    <div><label class="text-xs opacity-70 mb-1 block">Target Server</label>
-                        <select id="jwf-s-server" class="fx-select" onchange="jwfRefreshSchedSrcHint()"></select></div>
-                    <div><label class="text-xs opacity-70 mb-1 block">Target Folder</label>
-                        <div class="flex gap-2">
-                            <input type="text" id="jwf-s-path" placeholder="/tokens" class="fx-input flex-1">
-                            <button type="button" onclick="jwfBrowse('stgt')" class="fx-btn fx-btn-info"><i class="fas fa-folder-open"></i></button>
-                        </div>
-                    </div>
-                </div>
-                <div><label class="text-xs opacity-70 mb-1 block">Output File Name</label>
-                    <input type="text" id="jwf-s-outname" value="token_bd.json" class="fx-input"></div>
-                <div><label class="text-xs opacity-70 mb-1 block">Interval (ঘণ্টা)</label>
-                    <select id="jwf-s-interval" class="fx-select">
-                        <option value="1">1h</option><option value="2">2h</option><option value="3">3h</option>
-                        <option value="6" selected>6h</option><option value="12">12h</option><option value="24">24h</option>
-                    </select></div>
-                <div><label class="text-xs opacity-70 mb-1 block">Region Split (optional — আলাদা Region আলাদা ফাইল)</label>
-                    <div id="jwf-s-regions" class="space-y-2"></div>
-                    <button onclick="jwfAddRegionRow()" class="fx-btn fx-btn-info w-full mt-2"><i class="fas fa-plus"></i> Region +</button></div>
+    <!-- ===== UPLOAD LOADING MODAL ===== -->
+    <div id="upload-loading-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:9998;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);justify-content:center;align-items:center;">
+        <div class="fx-card" style="width:85%;max-width:380px;padding:28px;text-align:center;">
+            <div style="width:60px;height:60px;border:3px solid var(--hairline);border-top-color:var(--primary);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 16px;"></div>
+            <div style="font-weight:800;font-size:14px;margin-bottom:6px;" id="upload-modal-title">Uploading...</div>
+            <div style="font-size:11px;opacity:.6;margin-bottom:14px;" id="upload-modal-file">preparing</div>
+            <div class="progress-bar" style="height:6px;">
+                <div class="progress-fill" id="upload-modal-bar" style="width:0%;transition:width .3s;"></div>
             </div>
-            <div class="flex gap-2 mt-4">
-                <button onclick="jwfSaveSchedule()" class="fx-btn fx-btn-success flex-1"><i class="fas fa-save"></i> Save</button>
-                <button onclick="closeJwfSched()" class="fx-btn fx-btn-danger">Cancel</button>
-            </div>
+            <div style="font-size:11px;color:var(--primary);margin-top:8px;" id="upload-modal-pct">0%</div>
         </div>
     </div>
 
