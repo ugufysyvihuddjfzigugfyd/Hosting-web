@@ -2958,19 +2958,84 @@ function refreshDevices() {
         if (_fsLogsInterval) { clearInterval(_fsLogsInterval); _fsLogsInterval = null; }
     }
 
-    // ─── TERMUX UPDATER ──────────────────────────────────────────────
+    // ─── TERMUX UPDATER v3 (Server Selector + Env Auto-Detect) ──────
     let _termuxServer = null;
     let _termuxPolling = null;
     let _termuxLastLen = 0;
 
+    // Termux-নির্দিষ্ট কমান্ড → Linux/Railway-এর জন্য apt/pip-এ রূপান্তর
+    const _TERMUX_TO_LINUX = {
+        'pkg update':                    'apt-get update -y',
+        'pkg upgrade':                   'apt-get upgrade -y',
+        'pkg update && pkg upgrade -y':  'apt-get update -y && apt-get upgrade -y',
+        'pkg install ffmpeg -y':         'apt-get install -y ffmpeg',
+        'pkg install python -y':         'apt-get install -y python3 python3-pip',
+        'pkg install nodejs -y':         'apt-get install -y nodejs npm',
+        'pkg list-installed':            'dpkg -l | grep ^ii',
+        'pip install --upgrade pip':     'python3 -m pip install --upgrade pip',
+        'pip install -r requirements.txt':'python3 -m pip install --break-system-packages -r requirements.txt',
+    };
+
+    function _isTermuxEnv() {
+        return window.__IS_TERMUX === true;
+    }
+
+    function _adaptCommandForEnv(cmd) {
+        if (_isTermuxEnv()) return cmd;
+        if (_TERMUX_TO_LINUX[cmd]) return _TERMUX_TO_LINUX[cmd];
+        if (cmd.startsWith('pkg ')) {
+            return cmd.replace(/^pkg\s+/, 'apt-get ').replace(/\s+-y$/, '') + ' -y';
+        }
+        return cmd;
+    }
+
     window.openTermuxUpdater = function(serverId) {
         const modal = document.getElementById('termux-updater-modal');
         if (!modal) return;
+
+        // Dropdown populate
+        const servers = window.__SERVERS || {};
+        const ids = Object.keys(servers);
+        const sel = document.getElementById('termux-server-select');
+        if (sel) {
+            sel.innerHTML = '<option value="">— Select Server —</option>' +
+                ids.map(id => '<option value="' + id + '">' + id + '</option>').join('');
+            const autoPick = serverId || window.currentServer || '';
+            if (autoPick && ids.includes(autoPick)) sel.value = autoPick;
+        }
+
         _termuxServer = serverId || window.currentServer || null;
+
         const label = document.getElementById('termux-target-label');
-        if (label) label.textContent = _termuxServer ? '— ' + _termuxServer : '— (select a server first)';
+        if (label) label.textContent = _termuxServer ? ('— ' + _termuxServer) : '— no server selected';
+
+        const selRow = document.getElementById('termux-server-row');
+        if (selRow) selRow.style.display = ids.length ? 'flex' : 'none';
+
+        // Env notice
+        const envNote = document.getElementById('termux-env-note');
+        if (envNote) {
+            if (_isTermuxEnv()) {
+                envNote.innerHTML = '<i class="fas fa-check-circle mr-1"></i> Termux environment — pkg কমান্ড সাপোর্টেড';
+                envNote.style.color = 'var(--primary)';
+            } else {
+                envNote.innerHTML = '<i class="fas fa-info-circle mr-1"></i> Linux/Railway environment — <code>pkg</code> কমান্ড অটো <code>apt-get</code>-এ ম্যাপ হবে';
+                envNote.style.color = 'var(--info)';
+            }
+        }
+
         modal.style.display = 'flex';
         modal.classList.remove('hidden');
+        if (!_termuxServer && sel) setTimeout(() => sel.focus(), 100);
+        playClickSound();
+    };
+
+    window.termuxSelectServer = function(serverId) {
+        _termuxServer = serverId || null;
+        const label = document.getElementById('termux-target-label');
+        if (label) label.textContent = _termuxServer ? ('— ' + _termuxServer) : '— no server selected';
+        const statusEl = document.getElementById('termux-status-label');
+        if (statusEl) statusEl.textContent = _termuxServer ? 'Ready' : 'Select a server first';
         playClickSound();
     };
 
@@ -2983,24 +3048,32 @@ function refreshDevices() {
 
     window.termuxRun = async function(cmd) {
         if (!_termuxServer) {
-            // Try to use currentServer
             _termuxServer = window.currentServer;
             if (!_termuxServer) {
-                _termuxLog('⚠️ সার্ভার সিলেক্ট করুন (Server Manager থেকে খুলুন)\n');
+                _termuxLog('⚠️ সার্ভার সিলেক্ট করুন (উপরের ড্রপডাউন থেকে)\n');
+                if (window.showToast) showToast('সার্ভার সিলেক্ট করুন', 'error');
                 return;
             }
         }
+        const adapted = _adaptCommandForEnv(cmd);
+        const changed = adapted !== cmd;
+
         playClickSound();
         _termuxLog('$ ' + cmd + '\n');
+        if (changed) {
+            _termuxLog('↪ এই এনভায়রনমেন্টে চলে: ' + adapted + '\n');
+        }
+
         const statusEl = document.getElementById('termux-status-label');
         const stopBtn = document.getElementById('termux-stop-btn');
         if (statusEl) statusEl.textContent = '⏳ Running...';
         if (stopBtn) stopBtn.classList.remove('hidden');
+
         try {
             const res = await fetch('/api/server/' + _termuxServer + '/input', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ input: cmd })
+                body: JSON.stringify({ command: adapted })
             });
             const data = await res.json();
             if (data.status === 'ok') {
