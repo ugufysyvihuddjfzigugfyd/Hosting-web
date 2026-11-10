@@ -1912,28 +1912,6 @@
         }
     }
     
-    async function saveJwtApiSettings() {
-        try {
-            const res = await fetch('/api/settings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    jwt_api_url: document.getElementById('set-jwt-api-url').value.trim(),
-                    jwt_api_key: document.getElementById('set-jwt-api-key').value.trim()
-                })
-            });
-            const data = await res.json();
-            if (data.status === 'ok') {
-                showToast('JWT API সেটিংস সেভ হয়েছে!');
-            } else {
-                showToast(data.error || 'Failed', 'error');
-            }
-        } catch (e) {
-            showToast('Error', 'error');
-        }
-    }
-    window.saveJwtApiSettings = saveJwtApiSettings;
-
     function previewTheme(theme) {
         currentTheme = theme;
         const t = THEMES[theme];
@@ -2705,813 +2683,446 @@ function refreshDevices() {
     window.replaceAll = replaceAll;
     
 
-    (function(){
-        /* ---------- helpers ---------- */
-        const $ = id => document.getElementById(id);
-        // Robust server list: prefer __SERVERS (Jinja), fall back to reading the nav server cards,
-        // then to the servers API endpoint. Guarantees the selects are never empty when servers exist.
-        const getServersMap = function(){
-            if (window.__SERVERS && Object.keys(window.__SERVERS).length) return window.__SERVERS;
-            try {
-                const cards = document.querySelectorAll('[data-sid]');
-                if (cards.length){
-                    const m = {};
-                    cards.forEach(c => { const id = c.getAttribute('data-sid'); if (id && !m[id]) m[id] = {name: id}; });
-                    return m;
-                }
-            } catch(e){}
-            return {};
-        };
-        const getServerNames = () => Object.keys(getServersMap());
-        let serversMap = getServersMap();
-        let serverNames = getServerNames();
-        window.__refreshJwfSnapshots = function(){
-            serversMap = getServersMap();
-            serverNames = getServerNames();
-        };
-        // refresh now and again after a short delay to catch late script/config updates
-        requestAnimationFrame(function(){ window.__refreshJwfSnapshots(); });
-        setTimeout(function(){ window.__refreshJwfSnapshots(); }, 600);
-        setTimeout(function(){ window.__refreshJwfSnapshots(); }, 2000);
-        let browseTarget = null;   // 'src' | 'tgt'
-        let browsePath = '';       // current browse path (server-local)
-        let browseSid = null;
-        let progressTimer = null;
 
-        function serverOptionsHTML(selected, withNone){
-            let html = withNone ? "<option value=''>-- সিলেক্ট করুন --</option>" : "";
-            serverNames.forEach(id => {
-                const info = serversMap[id] || {};
-                html += "<option value='" + id.replace(/'/g, "\\'") + "'" + (id === selected ? " selected" : "") + ">" + id + (info.group && info.group !== 'default' ? " [" + info.group + "]" : "") + "</option>";
+// =====================================================================
+// MAHIR HOSTING — ENHANCED FEATURES v2.0
+// Sound + Upload Loading + Fullscreen Logs + Termux Updater
+// =====================================================================
+
+(function() {
+    'use strict';
+
+    // ─── SOUND ENGINE ────────────────────────────────────────────────
+    const _AudioCtx = window.AudioContext || window.webkitAudioContext;
+    let _actx = null;
+
+    function _getCtx() {
+        if (!_actx) {
+            try { _actx = new _AudioCtx(); } catch(e) { return null; }
+        }
+        return _actx;
+    }
+
+    function playClickSound() {
+        const ctx = _getCtx(); if (!ctx) return;
+        try {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.08);
+            gain.gain.setValueAtTime(0.15, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.12);
+        } catch(e) {}
+    }
+
+    function playSuccessSound() {
+        const ctx = _getCtx(); if (!ctx) return;
+        try {
+            [523, 659, 784].forEach((freq, i) => {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain); gain.connect(ctx.destination);
+                osc.type = 'sine';
+                osc.frequency.value = freq;
+                const t = ctx.currentTime + i * 0.1;
+                gain.gain.setValueAtTime(0, t);
+                gain.gain.linearRampToValueAtTime(0.12, t + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+                osc.start(t); osc.stop(t + 0.18);
             });
-            return html;
-        }
+        } catch(e) {}
+    }
 
-        function pathSegments(subpath){
-            // subpath like "user_files/JWT/tokens" -> ['user_files','JWT','tokens']
-            return (subpath || '').replace(/^\/+|\/+$/g, '').split('/').filter(Boolean);
-        }
+    function playErrorSound() {
+        const ctx = _getCtx(); if (!ctx) return;
+        try {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(220, ctx.currentTime);
+            gain.gain.setValueAtTime(0.1, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+            osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.2);
+        } catch(e) {}
+    }
 
-        function subpathOptions(sid, selectedPath){
-            const info = serversMap[sid] || {};
-            // Build subpath options RELATIVE to the server's own folder.
-            // The server path may be absolute (e.g. /app/user_files/likeapi on Railway)
-            // or relative (user_files/likeapi) — strip everything up to 'user_files/<name>'.
-            const raw = info.path || '';
-            const uf = raw.lastIndexOf('user_files/');
-            let rel = uf >= 0 ? raw.slice(uf + 'user_files/'.length) : raw;
-            rel = rel.replace(/^\/+|\/+$/g, '');
-            if (rel === 'user_files' || !rel) rel = '';
-            const segs = pathSegments(rel);
-            let html = "<option value=''>/ (root)</option>";
-            let acc = '';
-            segs.forEach(seg => {
-                acc = acc ? acc + '/' + seg : seg;
-                const val = '/' + acc;
-                html += "<option value='" + val.replace(/'/g, "\\u0027") + "'" + (val === selectedPath ? " selected" : "") + ">" + seg + "</option>";
-            });
-            // Guarantee the select always contains an option equal to the
-            // selected path (browse may set a deep path like /level1/level2).
-            if (selectedPath && selectedPath !== '/') {
-                const wanted = selectedPath.replace(/^\/+|\/+$/g, '');
-                const has = html.indexOf("value='" + selectedPath.replace(/'/g, "\\u0027") + "'") >= 0 || html.indexOf('value="' + selectedPath.replace(/'/g, '\\u0027') + '"') >= 0 || (wanted && html.indexOf("value='/" + wanted.replace(/'/g, "\\u0027") + "'") >= 0);
-                if (!has) {
-                    html += "<option value='" + selectedPath.replace(/'/g, "\\u0027") + "' selected>" + wanted + "</option>";
-                }
+    // Attach click sound to ALL buttons
+    function attachButtonSounds() {
+        document.addEventListener('click', function(e) {
+            const btn = e.target.closest('button, .nav-item, .tab-btn, .fx-btn, [onclick]');
+            if (btn && !btn.dataset.noSound) {
+                playClickSound();
             }
-            return html;
-        }
+        }, true);
+    }
 
-        function showToastNow(msg, kind){
-            try { showToast(msg, kind || 'info'); } catch(e){ console.warn(msg); }
-        }
+    // ─── UPLOAD LOADING MODAL ────────────────────────────────────────
+    function showUploadModal(filename) {
+        const modal = document.getElementById('upload-loading-modal');
+        if (!modal) return;
+        document.getElementById('upload-modal-title').textContent = 'Uploading...';
+        document.getElementById('upload-modal-file').textContent = filename || 'file';
+        document.getElementById('upload-modal-bar').style.width = '0%';
+        document.getElementById('upload-modal-pct').textContent = '0%';
+        modal.style.display = 'flex';
+        // Animate progress bar
+        let pct = 0;
+        modal._timer = setInterval(() => {
+            pct = Math.min(pct + Math.random() * 12, 85);
+            document.getElementById('upload-modal-bar').style.width = pct + '%';
+            document.getElementById('upload-modal-pct').textContent = Math.floor(pct) + '%';
+        }, 200);
+    }
 
-        /* ---------- server option loaders ---------- */
-        // idempotent: never leaves the select empty when servers exist
-        window.jwfLoadServerOptions = function(which){
-            // always re-snapshot latest data (handles race with inline config script)
-            window.__refreshJwfSnapshots();
-            const w = which === 'tgt' ? 'target' : (which === 'source' ? 'src' : which);
-            const whichS = w + '-';
-            const sEl = $('jwf-' + whichS + 'server');
-            const subEl = $('jwf-' + whichS + 'subpath');
-            if (!sEl) return;
-            const subPathOf = sid => {
-                const p = (serversMap[sid] && serversMap[sid].path) || '';
-                const uf = p.lastIndexOf('user_files/');
-                let rel = uf >= 0 ? p.slice(uf + 'user_files/'.length) : p;
-                rel = rel.replace(/^\/+|\/+$/g, '');
-                return rel ? '/' + rel : '/';
-            };
-            const defSid = (serversMap[sEl.value] ? sEl.value : serverNames[0]) || '';
-            try {
-                sEl.innerHTML = serverOptionsHTML(defSid, false);
-            } catch(e){ /* never break */ }
-            if (subEl){
-                // Only populate on first load (keep user's manual selection afterwards)
-                // source subpath ALWAYS defaults to '/' (server root) — the browse
-                // modal (and the select's ancestor options) handles sub-folders
-                const sp = which === 'tgt' ? ($('jwf-target-path') ? $('jwf-target-path').value : '') : '/';
-                try {
-                    if (!subEl.options.length || subEl.options.length < 2){
-                        subEl.innerHTML = subpathOptions(defSid, sp && sp !== '/' ? sp : '/');
-                    }
-                } catch(e){}
-            }
-            jwfRefreshTargetHint();
-            // auto-retry once if serverNames was empty at call time (late config race)
-            if (!serverNames.length && !sEl.options.length){
-                setTimeout(function(){ if (!sEl.options.length) window.jwfLoadServerOptions(which); }, 800);
-            }
-        };
-
-        function jwfRefreshTargetHint(){
-            const sEl = $('jwf-target-server');
-            const pEl = $('jwf-target-path');
-            const oEl = $('jwf-upload-target');
-            if (!sEl || !oEl) return;
-            const sid = sEl.value, raw = ((pEl && pEl.value) || '/').replace(/\/+/g,'/');
-            const out = ($('jwf-output-name') && $('jwf-output-name').value) || 'token_bd.json';
-            if (!sid){ oEl.innerHTML = '⚠️ প্রথমে Target Server সিলেক্ট করুন'; return; }
-            // normalize: ensure single slashes (avoid '//tokens/token_bd.json')
-            const path = '/' + raw.replace(/^\/+|\/+$/g, '');
-            const sep = path === '/' ? '' : '/';
-            oEl.innerHTML = '🎯 Upload destination: <b>' + sid + ' : ' + path + sep + out + '</b>';
-        }
-        ['jwf-target-server','jwf-target-path','jwf-output-name'].forEach(id => {
-            const el = $(id);
-            if (el) el.addEventListener('input', jwfRefreshTargetHint);
-        });
-
-        /* ---------- folder browser modal ----------
-         * Config-driven so every "browse" entry point (Process Setup's
-         * source/target AND the Schedule modal's source/target) shares one
-         * implementation instead of guessing element ids from `which`.
-         * which === 'src'  -> Process Setup source (select-based subpath)
-         * which === 'tgt'  -> Process Setup target (free-text path)
-         * which === 'ssrc' -> Schedule modal source (free-text path + file)
-         * which === 'stgt' -> Schedule modal target (free-text path)
-         */
-        const JWF_BROWSE_CFG = {
-            src:  { serverEl: 'jwf-src-server',    pathEl: 'jwf-src-subpath', isSelect: true  },
-            tgt:  { serverEl: 'jwf-target-server', pathEl: 'jwf-target-path', isSelect: false },
-            ssrc: { serverEl: 'jwf-s-srcserver',   pathEl: 'jwf-s-srcpath',   isSelect: false, fileEl: 'jwf-s-srcfile' },
-            stgt: { serverEl: 'jwf-s-server',      pathEl: 'jwf-s-path',      isSelect: false },
-        };
-        window.jwfBrowse = function(which){
-            const cfg = JWF_BROWSE_CFG[which];
-            if (!cfg){ return; }
-            browseTarget = which;
-            const sEl = $(cfg.serverEl);
-            const sid = sEl && sEl.value;
-            if (!sid){ showToastNow('প্রথমে server সিলেক্ট করুন', 'error'); return; }
-            browseSid = sid;
-            const pEl = $(cfg.pathEl);
-            browsePath = (pEl && pEl.value) || '/';
-            // browse operates INSIDE the server's own folder — strip the
-            // server's own subpath prefix so we never start outside it
-            const srvRaw = (serversMap[sid] && serversMap[sid].path) || '';
-            let srvRel = '';
-            const uf = srvRaw.lastIndexOf('user_files/');
-            if (uf >= 0) {
-                srvRel = srvRaw.slice(uf + 'user_files/'.length);
-            } else {
-                // absolute path outside any 'user_files/' marker — use the
-                // last folder segment (server's own root folder name)
-                const last = srvRaw.replace(/\/+$/, '').split('/').pop() || '';
-                if (last) srvRel = last;
-            }
-            srvRel = srvRel.replace(/^\/+|\/+$/g, '');
-            if (srvRel === 'user_files' || !srvRel) srvRel = '';
-            if (srvRel && browsePath.indexOf(srvRel) === 0) browsePath = browsePath.slice(srvRel.length);
-            if (browsePath && browsePath !== '/') browsePath = browsePath.replace(/^\/+|\/+$/g, '');
-            if (browsePath === '/') browsePath = '';
-            $('jwf-browse-title').textContent = (which === 'src' || which === 'ssrc') ? 'Source Folder ব্রাউজ' : 'Target Folder ব্রাউজ';
-            $('jwfBrowseModal').classList.add('active');
-            loadBrowseList();
-        };
-        window.closeJwfBrowse = function(){ $('jwfBrowseModal').classList.remove('active'); };
-        var browseFileSel = '';
-
-        function renderCrumb(){
-            const c = $('jwf-browse-crumb');
-            if (!c) return;
-            const esc = (str) => String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;');
-            const segs = browsePath ? browsePath.split('/') : [];
-            let html = "<span style=\"color:var(--primary); cursor:pointer;\" onclick=\"jwfBrowseGoto('')\">/</span>";
-            segs.forEach((seg, i) => {
-                html += "<span class='opacity-40'>/</span>";
-                const upto = segs.slice(0, i + 1).join('/');
-                const isLast = i === segs.length - 1;
-                const safe = upto.replace(/'/g, "\\u0027");
-                html += "<span style=\"" + (isLast ? 'color:var(--warning); font-weight:700;' : 'cursor:pointer; color:var(--primary);') + "\" onclick=\"jwfBrowseGoto('" + safe + "')\">" + esc(seg) + "</span>";
-            });
-            c.innerHTML = html;
-        }
-        async function loadBrowseList(){
-            try {
-                const res = await fetch('/api/files/' + encodeURIComponent(browseSid) + '?path=' + encodeURIComponent(browsePath));
-                const data = await res.json();
-                $('jwf-browse-path').textContent = '/' + browsePath;
-                renderCrumb();
-                let html = '';
-                if (browsePath) {
-                    const up = browsePath.split('/').slice(0, -1).join('/');
-                    html += "<div class='file-item' onclick='jwfBrowseGoto(\"" + up.replace(/"/g,'') + "\")'><i class='fas fa-level-up-alt' style='color:var(--primary);'></i><span>.. (উপরে যান)</span></div>";
-                }
-                const esc = s => s.replace(/\\/g,'\\\\').replace(/'/g,"\u0027");
-                (data.files || []).forEach(f => {
-                    if (f.type === 'dir') {
-                        // show ALL folders (dot-folders too), tap to drill
-                        const next = browsePath ? browsePath + '/' + f.name : f.name;
-                        html += "<div class='file-item' onclick='jwfBrowseGoto(\"" + esc(next) + "\")'><i class='fas fa-folder' style='color:var(--warning);'></i><span>" + esc(f.name) + "</span></div>";
-                    } else {
-                        // tap a file to select it as the source/output file
-                        html += "<div class='file-item' data-fname='" + esc(f.name) + "' onclick='jwfBrowsePickFile(\"" + esc(f.name) + "\")'><i class='fas fa-file-alt' style='color:var(--primary);'></i><span>" + esc(f.name) + "</span><span class='opacity-50 text-[10px] ml-auto'>" + esc(f.size) + "</span></div>";
-                    }
-                });
-                if (!html) html = "<div class='opacity-50 text-center py-4 text-xs'>খালি folder</div>";
-                $('jwf-browse-list').innerHTML = html;
-                jwfBrowseHighlight();
-            } catch(e){ showToastNow('Browse error: ' + e.message, 'error'); }
-        }
-        window.jwfBrowseGoto = function(nextPath){
-            browsePath = (nextPath || '').replace(/^\/+|\/+$/g, '');
-            if (browsePath === '/') browsePath = '';
-            browseFileSel = '';
-            loadBrowseList();
-        };
-        window.jwfBrowsePickFile = function(fname){ browseFileSel = fname; jwfBrowseHighlight(); };
-        window.jwfBrowseSelectPath = function(){
-            if (!browseTarget) return;
-            const cfg = JWF_BROWSE_CFG[browseTarget];
-            if (!cfg) return;
-            const displayPath = '/' + browsePath;
-            if (!cfg.isSelect){
-                // free-text path field (tgt / ssrc / stgt) — always applies exactly,
-                // any depth, no matching/guessing needed
-                const pEl = $(cfg.pathEl);
-                if (pEl) pEl.value = displayPath;
-                if (cfg.fileEl && browseFileSel){
-                    const fEl = $(cfg.fileEl);
-                    if (fEl) fEl.value = browseFileSel;
-                }
-            } else {
-                // source subpath is a <select> in Process Setup — ALWAYS ensure an
-                // option exists for the exact browsed path (any nesting depth) and
-                // select it, instead of falling back to a shallower ancestor
-                const pEl = $(cfg.pathEl);
-                if (pEl){
-                    let opt = null;
-                    for (var i = 0; i < pEl.options.length; i++){
-                        if (pEl.options[i].value === displayPath){ opt = pEl.options[i]; break; }
-                    }
-                    if (!opt){
-                        opt = document.createElement('option');
-                        opt.value = displayPath;
-                        opt.textContent = browsePath || '/ (root)';
-                        pEl.appendChild(opt);
-                    }
-                    pEl.value = displayPath;
-                }
-                $('jwf-src-status').textContent = '📁 Source path: ' + displayPath;
-            }
-            // file selected while browsing SOURCE: load its content straight into
-            // the Process Setup preview textarea
-            if (browseTarget === 'src') {
-                if (browseFileSel) {
-                    // remember the exact browsed path for jwfLoadSourceFile
-                    window.__jwfLastBrowsePath = browsePath;
-                    window.__jwfLastBrowseFile = browseFileSel;
-                }
-                window.jwfLoadSourceFile();
-            }
-            closeJwfBrowse();
-            if (browseTarget === 'tgt') jwfRefreshTargetHint();
-            if (browseTarget === 'ssrc' || browseTarget === 'stgt') jwfRefreshSchedSrcHint();
-        };
-        function jwfBrowseHighlight(){
-            // highlight the currently selected file row
-            var list = $('jwf-browse-list');
-            if (!list) return;
-            var rows = list.querySelectorAll('.file-item');
-            for (var i = 0; i < rows.length; i++){
-                rows[i].style.background = '';
-                rows[i].style.fontWeight = '';
-            }
-            if (browseFileSel){
-                for (var i = 0; i < rows.length; i++){
-                    if (rows[i].getAttribute('data-fname') === browseFileSel){
-                        rows[i].style.background = 'var(--primary)';
-                        rows[i].style.color = '#fff';
-                    }
-                }
-            }
-        };
-        window.jwfBrowseCreateFolder = async function(){
-            const name = ($('jwf-browse-newfolder').value || '').trim();
-            if (!name) return;
-            try {
-                const res = await fetch('/api/files/' + encodeURIComponent(browseSid) + '/mkdir', {
-                    method: 'POST', headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify({name: name, path: browsePath})});
-                const j = await res.json();
-                if (res.ok && (j.status === 'ok' || j.ok || j.message)) { showToastNow('Folder তৈরি হয়েছে'); loadBrowseList(); $('jwf-browse-newfolder').value=''; }
-                else showToastNow(j.error || 'Failed', 'error');
-            } catch(e){ showToastNow('Error: ' + e.message, 'error'); }
-        };
-
-        /* ---------- load source file ---------- */
-        window.jwfLoadSourceFile = async function(fnameOpt){
-            const sEl = $('jwf-src-server'), fEl = $('jwf-src-file');
-            const sid = sEl && sEl.value, fname = fnameOpt || window.__jwfLastBrowseFile || (fEl && fEl.value) || '';
-            // prefer the exact browsed path (the select only holds the
-            // server's own chain; browse may have drilled deeper)
-            let usePath = '';
-            if (browseTarget === 'src' && window.__jwfLastBrowsePath != null){
-                usePath = window.__jwfLastBrowsePath;
-            } else {
-                const subEl = $('jwf-src-subpath');
-                usePath = subEl && subEl.value ? subEl.value.replace(/^\/+|\/+$/g,'') : '';
-            }
-            if (!sid){ showToastNow('Source server সিলেক্ট করুন', 'error'); return; }
-            if (!fname){
-                // no explicit file: load accounts.txt-style common names from the current subpath and use the first match
-                const path = usePath;
-                const names = ['accounts.txt','accounts.json','combo.txt','uidpass.txt'];
-                let found = null;
-                try {
-                    const res = await fetch('/api/files/' + encodeURIComponent(sid) + '?path=' + encodeURIComponent(path));
-                    const data = await res.json();
-                    (data.files || []).forEach(f => { if (!found && names.indexOf(f.name) >= 0 && f.type !== 'dir') found = f.name; });
-                } catch(e){}
-                if (!found){ showToastNow('File name ব্রাউজ করে সিলেক্ট করুন অথবা upload করুন', 'error'); return; }
-                fname = found;
-                if (fEl) fEl.value = fname;
-            }
-            const path = usePath;
-            try {
-                const res = await fetch('/api/files/' + encodeURIComponent(sid) + '/content?filename=' + encodeURIComponent(fname) + '&path=' + encodeURIComponent(path));
-                const j = await res.json();
-                if (j.content !== undefined) { $('jwf-source').value = j.content; $('jwf-src-status').textContent = '✅ loaded (' + fname + ')'; }
-                else showToastNow(j.error || 'পড়া যায়নি', 'error');
-            } catch(e){ showToastNow('Error: ' + e.message, 'error'); }
-        };
-        /* ---------- local file picker preview ---------- */
-        window.jwfLoadLocalFile = function(inp){
-            const f = inp.files && inp.files[0];
-            if (!f) return;
-            if (f.size > 10 * 1024 * 1024){ showToastNow('সর্বোচ্চ 10MB', 'error'); inp.value = ''; return; }
-            const reader = new FileReader();
-            reader.onload = function(ev){
-                const txt = ev.target.result;
-                const ta = $('jwf-source');
-                if (ta) ta.value = txt;
-                const fn = $('jwf-src-file');
-                if (fn) fn.value = f.name;
-                $('jwf-src-status').textContent = '✅ local লোড হয়েছে (' + f.name + ', ' + Math.round(f.size/1024) + ' KB)';
-            };
-            reader.onerror = function(){ showToastNow('File পড়া যায়নি', 'error'); };
-            reader.readAsText(f);
-            inp.value = ''; // allow re-picking the same file
-        };
-
-        async function jwfPollUploadRun(runId, statusEl, fname){
-            try {
-                const res = await fetch('/api/jwtfactory/progress/' + runId);
-                const info = await res.json();
-                if (info.error){ if (statusEl) statusEl.textContent = '⚠️ ' + info.error; return; }
-                if (info.status === 'running'){
-                    if (statusEl) statusEl.textContent = '⏳ ' + fname + ' থেকে JWT generate হচ্ছে... ' + (info.done||0) + '/' + (info.total||0);
-                    setTimeout(function(){ jwfPollUploadRun(runId, statusEl, fname); }, 1500);
-                } else {
-                    const ok = info.success || 0, fail = info.failed || 0;
-                    const iv = ($('jwf-s-interval') && $('jwf-s-interval').value) || '6';
-                    if (statusEl) statusEl.textContent = '✅ ' + fname + ' থেকে ' + ok + 'টা token generate ও Target-এ upload হয়ে গেছে' +
-                        (fail ? (' (fail: ' + fail + ')') : '') + ' — নিচে Save চাপলে এখন থেকে প্রতি ' + iv + ' ঘণ্টা পরপর এভাবেই auto চলবে।';
-                    showToastNow('✅ JWT generate সম্পন্ন — ' + ok + ' success' + (fail ? (', ' + fail + ' fail') : ''));
-                }
-            } catch(e){
-                if (statusEl) statusEl.textContent = '⚠️ Progress check করা যায়নি: ' + e.message;
-            }
-        }
-        /* ---------- run now ---------- */
-        window.jwfRunNow = async function(){
-            const sEl = $('jwf-target-server');
-            const sid = sEl && sEl.value;
-            const src = ($('jwf-source').value || '').trim();
-            const out = ($('jwf-output-name').value || 'token_bd.json').trim();
-            const pEl = $('jwf-target-path');
-            // normalize: single leading slash, no double slashes, no trailing slash (root = '/')
-            const raw = (pEl && pEl.value) || '/';
-            const path = raw.replace(/\/+/g,'/').replace(/\/+$/,'') || '/';
-            if (!sid){ showToastNow('Target server সিলেক্ট করুন', 'error'); return; }
-            if (!src && !(($('jwf-src-file')||{}).value||'').trim()){ showToastNow('Source: paste করুন অথবা file load করুন', 'error'); return; }
-            const btn = $('jwf-btn-run'); btn.disabled = true;
-            try {
-                const regions = collectRegions();
-                const res = await fetch('/api/jwtfactory/run', {
-                    method: 'POST', headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify({server_id: sid, path: path, source: src, output_name: out, regions: regions})});
-                const j = await res.json();
-                if (j.run_id){
-                    showToastNow('✅ প্রসেসিং শুরু — ' + j.total + ' accounts');
-                    $('jwf-progress-wrap').classList.remove('hidden');
-                    pollProgress(j.run_id);
-                } else showToastNow(j.error || 'Failed', 'error');
-            } catch(e){ showToastNow('Error: ' + e.message, 'error'); }
-            finally { btn.disabled = false; }
-        };
-
-        function collectRegions(){
-            const rows = $('jwf-s-regions') ? $('jwf-s-regions').querySelectorAll('.jwf-region-row') : [];
-            const out = [];
-            rows.forEach(r => {
-                const reg = r.querySelector('.jwf-reg-name') && r.querySelector('.jwf-reg-name').value.trim();
-                const server = r.querySelector('.jwf-reg-server') && r.querySelector('.jwf-reg-server').value.trim();
-                const path = r.querySelector('.jwf-reg-path') && r.querySelector('.jwf-reg-path').value.trim();
-                const file = r.querySelector('.jwf-reg-file') && r.querySelector('.jwf-reg-file').value.trim();
-                if (reg && server) out.push({region: reg, server_id: server, path: path, filename: file || ('accounts_' + reg + '.json')});
-            });
-            return out;
-        }
-
-        /* ---------- progress polling ---------- */
-        function pollProgress(runId){
-            clearInterval(progressTimer);
-            progressTimer = setInterval(async () => {
-                try {
-                    const res = await fetch('/api/jwtfactory/progress/' + encodeURIComponent(runId));
-                    if (!res.ok){ clearInterval(progressTimer); return; }
-                    const p = await res.json();
-                    $('jwf-pct-text').textContent = Math.round((p.done || 0) / Math.max(p.total || 1, 1) * 100) + '%';
-                    $('jwf-pct-bar').style.width = Math.round((p.done || 0) / Math.max(p.total || 1, 1) * 100) + '%';
-                    $('jwf-done').textContent = p.done || 0;
-                    $('jwf-ok').textContent = p.success || 0;
-                    $('jwf-fail').textContent = p.failed || 0;
-                    $('jwf-latest').textContent = p.latest || '';
-                    if (p.region_files && Object.keys(p.region_files).length) {
-                        $('jwf-region-files').textContent = 'Region files: ' + JSON.stringify(p.region_files);
-                    }
-                    if (p.status === 'done' || p.status === 'error'){
-                        clearInterval(progressTimer);
-                        showToastNow(p.status === 'done' ? '✅ ' + p.latest : '❌ ' + (p.error || 'Error'), p.status === 'done' ? 'success' : 'error');
-                    }
-                } catch(e){ /* keep polling */ }
-            }, 1500);
-        }
-
-        /* ---------- schedule modal ---------- */
-        function jwfRefreshSchedSrcHint(){
-            const hEl = $('jwf-s-src-hint');
-            if (!hEl) return;
-            const ssEl = $('jwf-s-srcserver'), sfEl = $('jwf-s-srcfile'), spEl = $('jwf-s-srcpath');
-            const ssid = ssEl && ssEl.value, fname = (sfEl && sfEl.value || '').trim();
-            const spath = ((spEl && spEl.value) || '/').replace(/\/+/g,'/');
-            if (!ssid){ hEl.textContent = '⚠️ প্রথমে Source Server সিলেক্ট করুন'; return; }
-            const sep = spath === '/' ? '' : '/';
-            hEl.textContent = '📖 Source থেকে পড়বে: ' + ssid + ' : ' + spath + (fname ? sep + fname : '');
-        }
-        window.jwfScheduleUploadFile = async function(inp){
-            const f = inp.files && inp.files[0];
-            if (!f) return;
-            if (f.size > 10 * 1024 * 1024){ showToastNow('সর্বোচ্চ 10MB', 'error'); inp.value = ''; return; }
-            const ssEl = $('jwf-s-srcserver');
-            const sid = ssEl && ssEl.value;
-            const statusEl = $('jwf-s-upload-status');
-            if (!sid){ showToastNow('প্রথমে Source Server সিলেক্ট করুন', 'error'); inp.value = ''; return; }
-            const reader = new FileReader();
-            reader.onload = async function(ev){
-                const content = ev.target.result;
-                let path = ($('jwf-s-srcpath').value || '/').trim();
-                if (path === '/' || path === '') path = '';
-                if (statusEl) statusEl.textContent = '⏳ Upload হচ্ছে...';
-                try {
-                    // 1) save the raw account file on the Source Server — this is what
-                    //    every FUTURE scheduled run will re-read from
-                    const res = await fetch('/api/files/' + encodeURIComponent(sid) + '/save', {
-                        method: 'POST', headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ filename: f.name, path: path, content: content })
-                    });
-                    const j = await res.json();
-                    if (j.status !== 'ok'){
-                        if (statusEl) statusEl.textContent = '';
-                        showToastNow(j.error || 'Upload ব্যর্থ', 'error');
-                        return;
-                    }
-                    $('jwf-s-srcfile').value = f.name;
-                    jwfRefreshSchedSrcHint();
-
-                    // 2) RIGHT NOW — generate fresh JWT tokens from this exact file and
-                    //    upload them to the Target Server, same as pressing "Process Now"
-                    const tgtSid = ($('jwf-s-server') && $('jwf-s-server').value) || '';
-                    if (!tgtSid){
-                        if (statusEl) statusEl.textContent = '✅ ' + f.name + ' সার্ভারে সেভ হয়েছে। এখন JWT generate করতে আগে Target Server সিলেক্ট করুন, তারপর আবার Upload করুন — তখনই সাথে সাথে token generate ও upload হবে।';
-                        showToastNow('✅ Source সেভ হয়েছে — Target Server সিলেক্ট করে আবার Upload করুন', 'error');
-                        return;
-                    }
-                    const tgtPath = ($('jwf-s-path') && $('jwf-s-path').value || '/').trim();
-                    const outName = ($('jwf-s-outname') && $('jwf-s-outname').value || 'token_bd.json').trim();
-                    if (statusEl) statusEl.textContent = '⏳ ' + f.name + ' সেভ হয়েছে — এখন নতুন JWT generate হচ্ছে...';
-                    const runRes = await fetch('/api/jwtfactory/run', {
-                        method: 'POST', headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ server_id: tgtSid, path: tgtPath, source: content, output_name: outName, regions: collectRegions() })
-                    });
-                    const runJ = await runRes.json();
-                    if (runJ.error || !runJ.run_id){
-                        if (statusEl) statusEl.textContent = '⚠️ Source সেভ হয়েছে কিন্তু generate শুরু করা যায়নি: ' + (runJ.error || 'unknown error');
-                        showToastNow(runJ.error || 'Generate শুরু করা যায়নি', 'error');
-                        return;
-                    }
-                    showToastNow('🚀 Upload হয়েছে — সাথে সাথে নতুন JWT generate শুরু হয়েছে');
-                    jwfPollUploadRun(runJ.run_id, statusEl, f.name);
-                } catch(e){
-                    if (statusEl) statusEl.textContent = '';
-                    showToastNow('Error: ' + e.message, 'error');
-                }
-            };
-            reader.onerror = function(){ showToastNow('File পড়া যায়নি', 'error'); };
-            reader.readAsText(f);
-            inp.value = '';
-        };
-
-        window.jwfRefreshSchedSrcHint = jwfRefreshSchedSrcHint;
-        ['jwf-s-srcfile','jwf-s-srcpath'].forEach(id => {
-            const el = $(id);
-            if (el) el.addEventListener('input', jwfRefreshSchedSrcHint);
-        });
-
-        window.jwfOpenScheduleModal = function(editId){
-            $('jwf-edit-id').value = editId || '';
-            $('jwf-sched-modal-title').textContent = editId ? 'Edit Schedule' : 'New Schedule';
-            window.__refreshJwfSnapshots();
-            const sEl = $('jwf-s-server');
-            sEl.innerHTML = serverOptionsHTML(serverNames[0] || '', true);
-            // Source Server defaults to the SAME account/server as the currently
-            // selected Process Setup source (or the target, as a sane default) —
-            // it's independently editable so any account's file can be scheduled
-            const ssEl = $('jwf-s-srcserver');
-            const srcDefault = ($('jwf-src-server') && $('jwf-src-server').value) || serverNames[0] || '';
-            ssEl.innerHTML = serverOptionsHTML(srcDefault, true);
-            $('jwf-s-name').value=''; $('jwf-s-srcfile').value=''; $('jwf-s-srcpath').value='';
-            $('jwf-s-path').value='/'; $('jwf-s-outname').value='token_bd.json'; $('jwf-s-interval').value='6';
-            $('jwf-s-regions').innerHTML='';
-            const upEl = $('jwf-s-upload-status'); if (upEl) upEl.textContent = '';
-            $('jwfSchedModal').classList.add('active');
-            if (editId) fillScheduleEdit(editId);
-            else jwfRefreshSchedSrcHint();
-        };
-        window.closeJwfSched = function(){ $('jwfSchedModal').classList.remove('active'); };
-
-        window.jwfAddRegionRow = function(name, server, path, file){
-            const wrap = $('jwf-s-regions');
-            const div = document.createElement('div');
-            div.className = 'jwf-region-row flex gap-2 items-center';
-            div.innerHTML =
-                "<input class='fx-input jwf-reg-name flex-1' placeholder='Region (যেমন BD)' value='" + (name||'') + "'>" +
-                "<select class='fx-select jwf-reg-server flex-1'>" + serverOptionsHTML(server || serverNames[0] || '', false) + "</select>" +
-                "<input class='fx-input jwf-reg-path flex-1' placeholder='path' value='" + (path||'') + "'>" +
-                "<input class='fx-input jwf-reg-file flex-1' placeholder='file.json' value='" + (file||'') + "'>" +
-                "<button type='button' class='fx-btn fx-btn-danger' onclick='this.parentElement.remove()'><i class='fas fa-times'></i></button>";
-            wrap.appendChild(div);
-        };
-
-        async function fillScheduleEdit(id){
-            try {
-                const res = await fetch('/api/jwtfactory/schedules');
-                const j = await res.json();
-                const sc = (j.schedules || []).find(s => s.id === id);
-                if (!sc) return;
-                $('jwf-s-name').value = sc.name || '';
-                $('jwf-s-srcfile').value = sc.source_file || '';
-                $('jwf-s-srcpath').value = sc.source_path || '';
-                const ssEl = $('jwf-s-srcserver');
-                ssEl.innerHTML = serverOptionsHTML(sc.source_server_id || sc.server_id, true);
-                const sEl = $('jwf-s-server');
-                sEl.innerHTML = serverOptionsHTML(sc.server_id, true);
-                $('jwf-s-path').value = sc.path || '/';
-                $('jwf-s-outname').value = sc.output_name || 'token_bd.json';
-                $('jwf-s-interval').value = String(sc.interval_hours || 6);
-                $('jwf-s-regions').innerHTML = '';
-                (sc.regions || []).forEach(r => jwfAddRegionRow(r.region, r.server_id, r.path, r.filename));
-                jwfRefreshSchedSrcHint();
-            } catch(e){}
-        }
-
-        window.jwfSaveSchedule = async function(){
-            const id = $('jwf-edit-id').value;
-            const data = {
-                name: $('jwf-s-name').value || 'Schedule',
-                source_server_id: $('jwf-s-srcserver').value,
-                source_file: ($('jwf-s-srcfile').value || '').trim(),
-                source_path: ($('jwf-s-srcpath').value || '').trim(),
-                server_id: $('jwf-s-server').value,
-                path: ($('jwf-s-path').value || '/').trim(),
-                output_name: ($('jwf-s-outname').value || 'token_bd.json').trim(),
-                interval_hours: parseFloat($('jwf-s-interval').value || 6),
-                regions: collectRegions(),
-            };
-            if (!data.source_server_id){ showToastNow('Source Server সিলেক্ট করুন', 'error'); return; }
-            if (!data.server_id || !data.source_file){ showToastNow('Target Server ও source file দরকার', 'error'); return; }
-            try {
-                const url = id ? '/api/jwtfactory/schedules/' + id : '/api/jwtfactory/schedules';
-                const res = await fetch(url, {method: id ? 'PUT' : 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data)});
-                const j = await res.json();
-                if (j.id || j.ok){ showToastNow('✅ Schedule save হয়েছে'); closeJwfSched(); loadSchedules(); }
-                else showToastNow(j.error || 'Failed', 'error');
-            } catch(e){ showToastNow('Error: ' + e.message, 'error'); }
-        };
-
-        /* ---------- schedule dashboard ---------- */
-        async function loadSchedules(){
-            try {
-                const res = await fetch('/api/jwtfactory/schedules');
-                const j = await res.json();
-                const rows = j.schedules || [];
-                const body = $('jwf-sched-body'), empty = $('jwf-sched-empty');
-                if (!rows.length){ body.innerHTML = ''; empty.classList.remove('hidden'); return; }
-                empty.classList.add('hidden');
-                body.innerHTML = rows.map(sc => {
-                    const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-                    const stats = sc.last_run_stats ? ('<span class="opacity-70">ok ' + (sc.last_run_stats.success||0) + ' / fail ' + (sc.last_run_stats.failed||0) + '</span>') : '';
-                    const pauseBtn = sc.paused
-                        ? "<button class='fx-btn fx-btn-success text-[10px] px-2 py-1' onclick=\"jwfSchedAction('" + sc.id + "','resume')\"><i class='fas fa-play'></i></button>"
-                        : "<button class='fx-btn fx-btn-warning text-[10px] px-2' onclick=\"jwfSchedAction('" + sc.id + "','pause')\"><i class='fas fa-pause'></i></button>";
-                    return "<tr class='border-b' style='border-color:var(--hairline);'>" +
-                        "<td class='p-2 font-bold'>" + esc(sc.name) + "</td>" +
-                        "<td class='p-2 font-mono text-[10px]'>" + esc(sc.source_server_id || sc.server_id) + '<br>' + esc(sc.source_file) + "</td>" +
-                        "<td class='p-2 font-mono text-[10px]'>" + esc(sc.server_id) + '<br>' + esc(sc.path||'/') + "</td>" +
-                        "<td class='p-2'>" + esc(sc.output_name) + "</td>" +
-                        "<td class='p-2'>" + sc.interval_hours + 'h</td>' +
-                        "<td class='p-2 text-[10px]'>" + esc(sc.last_run||'—') + ' ' + stats + "</td>" +
-                        "<td class='p-2 text-[10px]'>" + esc(sc.next_run||'—') + "</td>" +
-                        "<td class='p-2 text-right whitespace-nowrap'>" +
-                            "<button class='fx-btn fx-btn-info text-[10px] px-2 py-1' onclick=\"jwfSchedAction('" + sc.id + "','run')\"><i class='fas fa-play'></i></button> " +
-                            pauseBtn +
-                            " <button class='fx-btn text-[10px] px-2 py-1' onclick=\"jwfOpenScheduleModal('" + sc.id + "')\"><i class='fas fa-edit'></i></button> " +
-                            "<button class='fx-btn fx-btn-danger text-[10px] px-2 py-1' onclick=\"jwfSchedAction('" + sc.id + "','delete')\"><i class='fas fa-trash'></i></button>" +
-                        "</td></tr>";
-                }).join('');
-            } catch(e){ console.warn('loadSchedules', e); }
-        }
-
-        window.jwfSchedAction = async function(id, action){
-            try {
-                let res;
-                if (action === 'delete') {
-                    res = await fetch('/api/jwtfactory/schedules/' + id, {method:'DELETE'});
-                } else {
-                    res = await fetch('/api/jwtfactory/schedules/' + id + '/action', {
-                        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action: action})});
-                }
-                const j = await res.json();
-                showToastNow(j.message || (action === 'delete' ? 'Delete হয়েছে' : 'OK'));
-                if (action === 'run' && j.run_id){ jwfMonitorActiveRuns[id] = j.run_id; jwfPollActiveRuns(); }
-                if (action !== 'run') loadSchedules();
-            } catch(e){ showToastNow('Error: ' + e.message, 'error'); }
-        };
-
-        /* ---------- JWT live monitor (progress bar + countdown + Start per schedule) ---------- */
-        let jwfMonitorRows = [];
-        const jwfMonitorActiveRuns = {}; // schedule id -> run_id currently being polled live
-
-        function jwfViewActive(){
-            const v = document.getElementById('view-jwtfactory');
-            return !!(v && v.classList.contains('active'));
-        }
-
-        function jwfFmtCountdown(ts){
-            if (!ts) return '—';
-            const diff = Math.round(ts - Date.now() / 1000);
-            if (diff <= 0) return 'এখনই';
-            const h = Math.floor(diff / 3600), m = Math.floor((diff % 3600) / 60), s = diff % 60;
-            if (h > 0) return h + 'ঘ ' + m + 'মি বাকি';
-            if (m > 0) return m + 'মি ' + s + 'সে বাকি';
-            return s + 'সে বাকি';
-        }
-
-        function jwfRenderMonitor(){
-            const list = $('jwf-monitor-list'), empty = $('jwf-monitor-empty');
-            if (!list) return;
-            if (!jwfMonitorRows.length){ list.innerHTML = ''; if (empty) empty.classList.remove('hidden'); return; }
-            if (empty) empty.classList.add('hidden');
-            const esc = s => (s === null || s === undefined ? '' : String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-            list.innerHTML = jwfMonitorRows.map(sc => {
-                const info = sc.last_run_info;
-                const running = info && info.status === 'running';
-                const total = running ? (info.total || 0) : 0;
-                const done = running ? (info.done || 0) : 0;
-                const pct = running ? (total > 0 ? Math.min(100, Math.round(done / total * 100)) : 5) : (sc.paused ? 0 : 100);
-                const barColor = running ? 'var(--info)' : (sc.paused ? 'var(--danger)' : 'var(--primary)');
-                const statusText = running
-                    ? ('⏳ চলছে... ' + done + '/' + total + (info.latest ? (' — ' + esc(info.latest)) : ''))
-                    : sc.paused
-                        ? '⏸️ Paused'
-                        : (sc.last_run
-                            ? ('✅ শেষ রান: ' + esc(sc.last_run) + (sc.last_run_stats ? (' (ok ' + (sc.last_run_stats.success||0) + ' / fail ' + (sc.last_run_stats.failed||0) + ')') : ''))
-                            : '— এখনো রান হয়নি');
-                const countdown = sc.paused ? 'Paused' : jwfFmtCountdown(sc.next_run_ts);
-                const idCount = (sc.account_count === null || sc.account_count === undefined) ? '—' : sc.account_count;
-                const startDisabled = running ? 'disabled style="opacity:.5;cursor:not-allowed;"' : '';
-                return '<div class="p-3 rounded-lg" style="background: rgba(255,255,255,.03); border:1px solid var(--hairline);">' +
-                    '<div class="flex items-center justify-between gap-2 mb-1.5">' +
-                        '<div class="font-bold text-xs">' + esc(sc.name) + '</div>' +
-                        '<button class="fx-btn fx-btn-success text-[10px] px-3 py-1" ' + startDisabled + ' onclick="jwfMonitorStart(\'' + sc.id + '\')"><i class="fas fa-play"></i> Start</button>' +
-                    '</div>' +
-                    '<div class="text-[10px] opacity-70 font-mono mb-2 break-all">' +
-                        '🖥️ ' + esc(sc.source_server_id || sc.server_id) + ' → ' + esc(sc.server_id) + ':' + esc(sc.path || '/') +
-                        ' &nbsp;|&nbsp; 🆔 ' + idCount + ' IDs' +
-                        ' &nbsp;|&nbsp; ⏱️ ' + esc(countdown) +
-                    '</div>' +
-                    '<div class="w-full rounded-full overflow-hidden" style="height:6px; background: rgba(255,255,255,.08);">' +
-                        '<div style="height:100%; width:' + pct + '%; background:' + barColor + '; transition: width .4s;"></div>' +
-                    '</div>' +
-                    '<div class="text-[10px] mt-1.5 opacity-80">' + statusText + '</div>' +
-                '</div>';
-            }).join('');
-        }
-
-        async function jwfLoadMonitor(){
-            if (!jwfViewActive()) return;
-            try {
-                const res = await fetch('/api/jwtfactory/schedules');
-                const j = await res.json();
-                jwfMonitorRows = j.schedules || [];
-                jwfMonitorRows.forEach(sc => {
-                    const info = sc.last_run_info;
-                    if (info && info.status === 'running' && info.run_id) jwfMonitorActiveRuns[sc.id] = info.run_id;
-                });
-                jwfRenderMonitor();
-            } catch(e){ console.warn('jwfLoadMonitor', e); }
-        }
-
-        async function jwfPollActiveRuns(){
-            if (!jwfViewActive()) return;
-            const ids = Object.keys(jwfMonitorActiveRuns);
-            if (!ids.length) return;
-            let anyFinished = false;
-            for (const sid of ids){
-                const runId = jwfMonitorActiveRuns[sid];
-                if (!runId){ delete jwfMonitorActiveRuns[sid]; continue; }
-                try {
-                    const res = await fetch('/api/jwtfactory/progress/' + runId);
-                    if (!res.ok){ delete jwfMonitorActiveRuns[sid]; continue; }
-                    const info = await res.json();
-                    if (info.error){ delete jwfMonitorActiveRuns[sid]; continue; }
-                    const row = jwfMonitorRows.find(r => r.id === sid);
-                    if (row) row.last_run_info = Object.assign({}, row.last_run_info, info, {run_id: runId});
-                    if (info.status !== 'running'){ delete jwfMonitorActiveRuns[sid]; anyFinished = true; }
-                } catch(e){ /* transient — try again next tick */ }
-            }
-            jwfRenderMonitor();
-            if (anyFinished) jwfLoadMonitor(); // refresh next_run/account_count/last_run once a run completes
-        }
-
-        window.jwfMonitorStart = async function(sid){
-            try {
-                const res = await fetch('/api/jwtfactory/schedules/' + sid + '/action', {
-                    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'run'})
-                });
-                const j = await res.json();
-                if (j.run_id){
-                    jwfMonitorActiveRuns[sid] = j.run_id;
-                    showToastNow('🚀 নতুন JWT generate শুরু হয়েছে');
-                    jwfPollActiveRuns();
-                } else {
-                    showToastNow(j.message || j.error || 'শুরু হয়েছে', j.error ? 'error' : undefined);
-                }
-                loadSchedules();
-            } catch(e){ showToastNow('Error: ' + e.message, 'error'); }
-        };
-
-        setInterval(jwfRenderMonitor, 1000);       // tick the countdown text every second (no network)
-        setInterval(jwfPollActiveRuns, 2000);       // live progress for any run currently in flight
-        setInterval(jwfLoadMonitor, 15000);         // periodic full refresh (new schedules, next-run drift)
-
-        /* hook into view switching */
-        const origSwitch = window.switchView;
-        window.switchView = function(view){
-            if (origSwitch) origSwitch(view);
-            if (view === 'jwtfactory'){
-                // staggered retries guarantee population even after late script/config loading
-                jwfLoadServerOptions('src'); jwfLoadServerOptions('tgt');
-                setTimeout(function(){ jwfLoadServerOptions('src'); jwfLoadServerOptions('tgt'); }, 500);
-                setTimeout(function(){ jwfLoadServerOptions('src'); jwfLoadServerOptions('tgt'); }, 1500);
-                $('jwf-upload-target') && (jwfRefreshTargetHint());
-                loadSchedules();
-                jwfLoadMonitor();
-            }
-        };
-        // ALSO populate immediately when the DOM is ready (before first view switch) so the
-        // selects are never blank if the user lands directly on #jwtfactory or the page restores hash
-        if (document.readyState === 'complete' || document.readyState === 'interactive'){
-            setTimeout(function(){ jwfLoadServerOptions('src'); jwfLoadServerOptions('tgt'); }, 200);
+    function hideUploadModal(success) {
+        const modal = document.getElementById('upload-loading-modal');
+        if (!modal) return;
+        clearInterval(modal._timer);
+        const bar = document.getElementById('upload-modal-bar');
+        const pctEl = document.getElementById('upload-modal-pct');
+        const title = document.getElementById('upload-modal-title');
+        bar.style.width = '100%';
+        pctEl.textContent = '100%';
+        if (success !== false) {
+            title.textContent = '✅ Upload Complete!';
+            bar.style.background = 'var(--primary)';
+            playSuccessSound();
         } else {
-            document.addEventListener('DOMContentLoaded', function(){
-                setTimeout(function(){ jwfLoadServerOptions('src'); jwfLoadServerOptions('tgt'); }, 200);
-            });
+            title.textContent = '❌ Upload Failed!';
+            bar.style.background = 'var(--danger)';
+            playErrorSound();
         }
-        window.showToastNow = showToastNow;
-        window.jwfRefreshTargetHint = jwfRefreshTargetHint;
-    })();
-    
+        setTimeout(() => {
+            modal.style.display = 'none';
+            bar.style.background = '';
+        }, 1500);
+    }
+
+    // Patch the original uploadFile function
+    const _origUploadFile = window.uploadFile;
+    window.uploadFile = async function(input) {
+        if (!input.files.length) return;
+        const fname = input.files[0].name;
+        showUploadModal(fname);
+        try {
+            await (_origUploadFile ? _origUploadFile.call(this, input) : _fallbackUploadFile(input));
+            hideUploadModal(true);
+            if (window.showToast) showToast('✅ ' + fname + ' uploaded!', 'success');
+        } catch(e) {
+            hideUploadModal(false);
+        }
+    };
+
+    async function _fallbackUploadFile(input) {
+        if (!input.files.length || !window.currentServer) throw new Error('No server');
+        const formData = new FormData();
+        formData.append('file', input.files[0]);
+        formData.append('path', window.currentPath || '');
+        const res = await fetch('/api/files/' + window.currentServer + '/upload', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (data.status !== 'ok') throw new Error(data.error || 'Failed');
+        if (window.loadFiles) await window.loadFiles();
+    }
+
+    // Patch executeBulkUpload for loading modal
+    const _origBulkUpload = window.executeBulkUpload;
+    window.executeBulkUpload = async function() {
+        const fileEl = document.getElementById('bulk-upload-label');
+        const fname = fileEl ? fileEl.textContent.trim() : 'bulk upload';
+        if (fname && fname !== 'ফাইল বাছাই করুন...') showUploadModal(fname);
+        try {
+            await (_origBulkUpload ? _origBulkUpload.call(this) : Promise.resolve());
+            hideUploadModal(true);
+        } catch(e) {
+            hideUploadModal(false);
+        }
+    };
+
+    // ─── FULLSCREEN LOGS ─────────────────────────────────────────────
+    let _fsLogsRunning = true;
+    let _fsLogsInterval = null;
+    let _fsAutoScroll = true;
+
+    window.openFullscreenLogs = function() {
+        const modal = document.getElementById('fullscreen-logs-modal');
+        if (!modal) return;
+        modal.style.display = 'flex';
+        modal.classList.remove('hidden');
+        // Copy current logs
+        const srcLog = document.getElementById('manager-log');
+        const destLog = document.getElementById('fs-logs-content');
+        if (srcLog && destLog) {
+            destLog.textContent = srcLog.textContent;
+        }
+        document.getElementById('fs-logs-title').textContent = '📋 Logs — ' + (window.currentServer || '?');
+        _fsLogsRunning = true;
+        _fsAutoScroll = true;
+        _startFsLogPolling();
+        playClickSound();
+    };
+
+    window.closeFullscreenLogs = function() {
+        const modal = document.getElementById('fullscreen-logs-modal');
+        if (modal) {
+            modal.style.display = 'none';
+            modal.classList.add('hidden');
+        }
+        _stopFsLogPolling();
+        playClickSound();
+    };
+
+    window.fsToggleLogsStream = function() {
+        const btn = document.getElementById('fs-logs-stop-btn');
+        if (_fsLogsRunning) {
+            _stopFsLogPolling();
+            _fsLogsRunning = false;
+            if (btn) btn.innerHTML = '<i class="fas fa-play mr-1"></i>Resume';
+        } else {
+            _fsLogsRunning = true;
+            _startFsLogPolling();
+            if (btn) btn.innerHTML = '<i class="fas fa-stop mr-1"></i>Stop';
+        }
+    };
+
+    window.fsToggleAutoscroll = function() {
+        _fsAutoScroll = !_fsAutoScroll;
+        const btn = document.getElementById('fs-logs-autoscroll-btn');
+        if (btn) {
+            btn.style.borderColor = _fsAutoScroll ? 'var(--primary)' : 'var(--hairline)';
+            btn.style.color = _fsAutoScroll ? 'var(--primary)' : 'rgba(255,255,255,.4)';
+        }
+    };
+
+    window.fsClearLogs = async function() {
+        if (!window.currentServer) return;
+        try {
+            await fetch('/api/server/' + window.currentServer + '/clear_logs', { method: 'POST' });
+            const el = document.getElementById('fs-logs-content');
+            if (el) el.textContent = '— logs cleared —\n';
+            if (window.showToast) showToast('Logs cleared');
+        } catch(e) {}
+    };
+
+    window.fsCopyLogs = function() {
+        const el = document.getElementById('fs-logs-content');
+        if (!el) return;
+        navigator.clipboard.writeText(el.textContent).then(() => {
+            if (window.showToast) showToast('Logs copied!');
+        }).catch(() => {
+            const ta = document.createElement('textarea');
+            ta.value = el.textContent;
+            document.body.appendChild(ta); ta.select();
+            document.execCommand('copy'); document.body.removeChild(ta);
+            if (window.showToast) showToast('Logs copied!');
+        });
+    };
+
+    window.fsSendCommand = async function() {
+        const inp = document.getElementById('fs-cmd-input');
+        if (!inp || !inp.value.trim() || !window.currentServer) return;
+        const cmd = inp.value.trim(); inp.value = '';
+        try {
+            const res = await fetch('/api/server/' + window.currentServer + '/input', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ input: cmd })
+            });
+            const data = await res.json();
+            if (data.status !== 'ok' && window.showToast) showToast(data.error || 'Sent', data.status);
+        } catch(e) {}
+    };
+
+    function _startFsLogPolling() {
+        _stopFsLogPolling();
+        _fsLogsInterval = setInterval(async () => {
+            if (!_fsLogsRunning || !window.currentServer) return;
+            try {
+                const res = await fetch('/api/server/' + window.currentServer + '/logs', {cache: 'no-store'});
+                const data = await res.json();
+                const el = document.getElementById('fs-logs-content');
+                if (el && data.logs) {
+                    el.textContent = data.logs;
+                    const cnt = document.getElementById('fs-log-count');
+                    if (cnt) cnt.textContent = data.logs.split('\n').length + ' lines';
+                    if (_fsAutoScroll) el.scrollTop = el.scrollHeight;
+                }
+            } catch(e) {}
+        }, 1500);
+    }
+
+    function _stopFsLogPolling() {
+        if (_fsLogsInterval) { clearInterval(_fsLogsInterval); _fsLogsInterval = null; }
+    }
+
+    // ─── TERMUX UPDATER ──────────────────────────────────────────────
+    let _termuxServer = null;
+    let _termuxPolling = null;
+    let _termuxLastLen = 0;
+
+    window.openTermuxUpdater = function(serverId) {
+        const modal = document.getElementById('termux-updater-modal');
+        if (!modal) return;
+        _termuxServer = serverId || window.currentServer || null;
+        const label = document.getElementById('termux-target-label');
+        if (label) label.textContent = _termuxServer ? '— ' + _termuxServer : '— (select a server first)';
+        modal.style.display = 'flex';
+        modal.classList.remove('hidden');
+        playClickSound();
+    };
+
+    window.closeTermuxUpdater = function() {
+        const modal = document.getElementById('termux-updater-modal');
+        if (modal) { modal.style.display = 'none'; modal.classList.add('hidden'); }
+        _termuxStopPoll();
+        playClickSound();
+    };
+
+    window.termuxRun = async function(cmd) {
+        if (!_termuxServer) {
+            // Try to use currentServer
+            _termuxServer = window.currentServer;
+            if (!_termuxServer) {
+                _termuxLog('⚠️ সার্ভার সিলেক্ট করুন (Server Manager থেকে খুলুন)\n');
+                return;
+            }
+        }
+        playClickSound();
+        _termuxLog('$ ' + cmd + '\n');
+        const statusEl = document.getElementById('termux-status-label');
+        const stopBtn = document.getElementById('termux-stop-btn');
+        if (statusEl) statusEl.textContent = '⏳ Running...';
+        if (stopBtn) stopBtn.classList.remove('hidden');
+        try {
+            const res = await fetch('/api/server/' + _termuxServer + '/input', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ input: cmd })
+            });
+            const data = await res.json();
+            if (data.status === 'ok') {
+                _termuxLog('✅ Command sent — watching logs...\n');
+                _termuxStartPoll();
+            } else {
+                _termuxLog('❌ Error: ' + (data.error || 'unknown') + '\n');
+                if (statusEl) statusEl.textContent = 'Error';
+                if (stopBtn) stopBtn.classList.add('hidden');
+            }
+        } catch(e) {
+            _termuxLog('❌ Network error: ' + e.message + '\n');
+            if (statusEl) statusEl.textContent = 'Error';
+            if (stopBtn) stopBtn.classList.add('hidden');
+        }
+    };
+
+    window.termuxRunCustom = function() {
+        const inp = document.getElementById('termux-cmd-input');
+        if (!inp || !inp.value.trim()) return;
+        const cmd = inp.value.trim();
+        inp.value = '';
+        window.termuxRun(cmd);
+    };
+
+    window.termuxStop = function() {
+        _termuxStopPoll();
+        const statusEl = document.getElementById('termux-status-label');
+        const stopBtn = document.getElementById('termux-stop-btn');
+        if (statusEl) statusEl.textContent = 'Stopped';
+        if (stopBtn) stopBtn.classList.add('hidden');
+        _termuxLog('⏹️ Stopped polling.\n');
+        playClickSound();
+    };
+
+    window.termuxClearLog = function() {
+        const el = document.getElementById('termux-log');
+        if (el) el.textContent = '$ cleared\n';
+        _termuxLastLen = 0;
+    };
+
+    function _termuxLog(text) {
+        const el = document.getElementById('termux-log');
+        if (!el) return;
+        el.textContent += text;
+        el.scrollTop = el.scrollHeight;
+    }
+
+    function _termuxStartPoll() {
+        _termuxStopPoll();
+        _termuxLastLen = 0;
+        let noChangeCount = 0;
+        _termuxPolling = setInterval(async () => {
+            if (!_termuxServer) { _termuxStopPoll(); return; }
+            try {
+                const res = await fetch('/api/server/' + _termuxServer + '/logs', {cache: 'no-store'});
+                const data = await res.json();
+                if (data.logs) {
+                    const lines = data.logs.split('\n');
+                    if (lines.length > _termuxLastLen) {
+                        const newLines = lines.slice(_termuxLastLen);
+                        _termuxLastLen = lines.length;
+                        newLines.forEach(l => _termuxLog(l + '\n'));
+                        noChangeCount = 0;
+                    } else {
+                        noChangeCount++;
+                        // Stop polling after 15s of no change
+                        if (noChangeCount > 10) {
+                            _termuxStopPoll();
+                            const statusEl = document.getElementById('termux-status-label');
+                            const stopBtn = document.getElementById('termux-stop-btn');
+                            if (statusEl) statusEl.textContent = '✅ Done';
+                            if (stopBtn) stopBtn.classList.add('hidden');
+                            playSuccessSound();
+                        }
+                    }
+                }
+            } catch(e) {}
+        }, 1500);
+    }
+
+    function _termuxStopPoll() {
+        if (_termuxPolling) { clearInterval(_termuxPolling); _termuxPolling = null; }
+    }
+
+    // ─── NOTIFICATION SOUND INTEGRATION ─────────────────────────────
+    // Patch showToast to play sounds
+    const _origShowToast = window.showToast;
+    window.showToast = function(message, type) {
+        if (_origShowToast) _origShowToast(message, type);
+        if (type === 'error') playErrorSound();
+        else if (type === 'success' || !type) playSuccessSound();
+    };
+
+    // ─── CSS SPIN ANIMATION ──────────────────────────────────────────
+    if (!document.getElementById('mahir-enhanced-css')) {
+        const style = document.createElement('style');
+        style.id = 'mahir-enhanced-css';
+        style.textContent = `
+            @keyframes spin { to { transform: rotate(360deg); } }
+            #fullscreen-logs-modal { font-family: 'JetBrains Mono', monospace; }
+            #fs-logs-content { line-height: 1.5; }
+            #termux-log { font-size: 12px; line-height: 1.6; }
+            .fx-btn:active { transform: scale(0.97); }
+            #upload-loading-modal .fx-card { animation: slideUp 0.2s ease; }
+            @keyframes slideUp { from { transform: translateY(20px); opacity:0; } to { transform: translateY(0); opacity:1; } }
+        `;
+        document.head.appendChild(style);
+    }
+
+    // ─── INIT ────────────────────────────────────────────────────────
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', attachButtonSounds);
+    } else {
+        attachButtonSounds();
+    }
+
+    // Export
+    window.playClickSound = playClickSound;
+    window.playSuccessSound = playSuccessSound;
+    window.playErrorSound = playErrorSound;
+    window.showUploadModal = showUploadModal;
+    window.hideUploadModal = hideUploadModal;
+
+})();
